@@ -117,4 +117,9 @@ export const updateOrderToPaid = async (id: string, paymentResult: any): Promise
   return response.data;
 };
 
+export const resetPassword = async (email: string): Promise<void> => {
+  const response = await api.post('/users/reset-password', { email });
+  return response.data;
+};
+
 export default api; 

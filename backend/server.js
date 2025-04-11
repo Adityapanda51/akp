@@ -4,6 +4,7 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const userRoutes = require('./routes/userRoutes');
+const vendorRoutes = require('./routes/vendorRoutes');
 
 dotenv.config();
 
@@ -16,7 +17,9 @@ const app = express();
 const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
   'http://localhost:19000',
   'http://localhost:19006',
-  'http://10.0.2.2:19000'
+  'http://10.0.2.2:19000',
+  'http://192.168.98.174:19000',
+  'http://192.168.98.174:19006'
 ];
 
 // Middleware
@@ -30,6 +33,7 @@ app.use(cors({
 
 // Routes
 app.use('/api/users', userRoutes);
+app.use('/api/vendors', vendorRoutes);
 
 // Root route
 app.get('/', (req, res) => {
