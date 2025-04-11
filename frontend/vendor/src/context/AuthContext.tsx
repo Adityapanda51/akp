@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI } from '../services/api';
+import { registerVendor, loginVendor, getVendorProfile } from '../services/api';
 
 interface User {
   _id: string;
@@ -12,6 +12,15 @@ interface User {
   role?: string;
   profilePicture?: string;
   token?: string;
+}
+
+interface AuthResponse {
+  _id: string;
+  name: string;
+  email: string;
+  storeName: string;
+  role: string;
+  token: string;
 }
 
 interface AuthContextType {
@@ -67,9 +76,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('AuthContext: Starting login process');
       setLoading(true);
-      console.log('AuthContext: Calling authAPI.login');
+      console.log('AuthContext: Calling loginVendor');
       
-      const response = await authAPI.login(email, password);
+      const response = await loginVendor({ email, password }) as AuthResponse;
       console.log('AuthContext: Login API call successful');
       console.log('AuthContext: Login response:', response);
       
@@ -116,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Starting registration process...');
       console.log('Registration data:', { ...userData, password: '[REDACTED]' });
       
-      const response = await authAPI.register(userData);
+      const response = await registerVendor(userData) as AuthResponse;
       console.log('Registration API response:', response);
       
       console.log('Registration successful, saving token and user data...');
@@ -167,7 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       // Get the updated profile from the API
-      const response = await authAPI.getProfile();
+      const response = await getVendorProfile() as User;
       
       // Update stored user data
       const updatedUser = { 

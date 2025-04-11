@@ -57,16 +57,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      const userData = await api.login(email, password);
+      console.log('Starting login process...');
       
-      // Save user and token to storage
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      await AsyncStorage.setItem('userToken', userData.token || '');
-      
-      setUser(userData);
+      // Check if we can reach the API
+      try {
+        const userData = await api.login(email, password);
+        console.log('Login successful, saving user data...');
+        
+        // Save user and token to storage
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        await AsyncStorage.setItem('userToken', userData.token || '');
+        
+        setUser(userData);
+        console.log('Login process completed successfully');
+      } catch (apiError: any) {
+        console.error('API call error:', apiError);
+        
+        // Check if it's a network error
+        if (apiError.message === 'Network Error') {
+          setError('Cannot connect to the server. Please check your internet connection and try again.');
+        } else {
+          setError(apiError.response?.data?.message || 'Failed to login. Please check your credentials.');
+        }
+        throw apiError;
+      }
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to login');
       console.error('Login error:', error);
+      // Error is already set above
     } finally {
       setLoading(false);
     }

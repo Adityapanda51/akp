@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   Platform,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -41,7 +42,11 @@ const ProfileScreen = () => {
           <Text style={styles.headerTitle}>Profile</Text>
         </View>
 
-        <View style={styles.content}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
               {user?.profilePicture ? (
@@ -127,15 +132,15 @@ const ProfileScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
+        </ScrollView>
 
-          <View style={styles.bottomContainer}>
-            <Button
-              title="Logout"
-              onPress={handleLogout}
-              outline
-              containerStyle={styles.logoutButton}
-            />
-          </View>
+        <View style={styles.bottomContainer}>
+          <Button
+            title="Logout"
+            onPress={handleLogout}
+            outline
+            containerStyle={styles.logoutButton}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -164,9 +169,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Platform.OS === 'android' ? 0 : SIZES.padding,
   },
-  content: {
+  scrollView: {
     flex: 1,
-    paddingBottom: BOTTOM_TAB_HEIGHT,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: SIZES.padding * 2,
   },
   profileSection: {
     alignItems: 'center',
@@ -268,6 +276,9 @@ const styles = StyleSheet.create({
   bottomContainer: {
     paddingHorizontal: SIZES.padding,
     paddingBottom: SIZES.padding,
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGray + '20',
   },
   logoutButton: {
     width: '100%',

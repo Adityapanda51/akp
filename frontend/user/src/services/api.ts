@@ -6,22 +6,26 @@ import { Platform } from 'react-native';
 // Base URL for API calls
 // Use appropriate URL based on device type
 const API_URL = Platform.select({
-  android: process.env.EXPO_PUBLIC_API_URL_ANDROID || 'http://10.0.2.2:5000/api', // Android Emulator
-  ios: process.env.EXPO_PUBLIC_API_URL_IOS || 'http://localhost:5000/api',     // iOS Simulator
-  default: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'  // Fallback
+  android: 'http://192.168.98.174:5000/api', // Android Emulator
+  ios: 'http://192.168.98.174:5000/api',     // iOS Simulator
+  default: 'http://192.168.98.174:5000/api'  // Fallback
 });
 
-// Create axios instance
+console.log('Using API URL:', API_URL);
+
+// Create axios instance with better error handling
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 seconds timeout
 });
 
 // Add a request interceptor to add auth token to requests
 api.interceptors.request.use(
   async (config) => {
+    console.log('Making request to:', config.url);
     const token = await AsyncStorage.getItem('userToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -29,13 +33,17 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
 
 // Add a response interceptor for better error logging
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('Response received:', response.status);
+    return response;
+  },
   (error) => {
     console.error('API Error:', {
       message: error.message,

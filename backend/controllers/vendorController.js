@@ -7,29 +7,38 @@ const crypto = require('crypto');
 const sendEmail = require('../utils/sendEmail');
 
 // @desc    Register a new vendor
-// @route   POST /api/vendors/register
+// @route   POST /api/vendors
 // @access  Public
 const registerVendor = asyncHandler(async (req, res) => {
-  const { name, email, password, storeName, storeAddress, phone } = req.body;
+  console.log('Vendor registration attempt:', req.body);
+  const { name, email, password, storeName } = req.body;
 
+  console.log('Checking if user already exists with email:', email);
   const userExists = await User.findOne({ email });
 
   if (userExists) {
+    console.log('Registration failed: User already exists');
     res.status(400);
     throw new Error('User already exists');
   }
 
+  console.log('Creating new vendor user');
   const user = await User.create({
     name,
     email,
     password,
     role: 'vendor',
     storeName,
-    storeAddress,
-    phone
   });
 
   if (user) {
+    console.log('Vendor registration successful:', {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      storeName: user.storeName
+    });
     res.status(201).json({
       _id: user._id,
       name: user.name,
@@ -39,8 +48,9 @@ const registerVendor = asyncHandler(async (req, res) => {
       token: generateToken(user._id),
     });
   } else {
+    console.log('Registration failed: Invalid user data');
     res.status(400);
-    throw new Error('Invalid vendor data');
+    throw new Error('Invalid user data');
   }
 });
 
@@ -48,20 +58,40 @@ const registerVendor = asyncHandler(async (req, res) => {
 // @route   POST /api/vendors/login
 // @access  Public
 const authVendor = asyncHandler(async (req, res) => {
+  console.log('Vendor login attempt:', req.body);
   const { email, password } = req.body;
 
+  console.log('Looking for user with email:', email);
   const user = await User.findOne({ email });
-
-  if (user && (await user.matchPassword(password)) && user.role === 'vendor') {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
+  
+  if (user) {
+    console.log('User found:', { 
+      id: user._id, 
+      email: user.email, 
       role: user.role,
-      storeName: user.storeName,
-      token: generateToken(user._id),
+      name: user.name
     });
+    
+    const isPasswordMatch = await user.matchPassword(password);
+    console.log('Password match:', isPasswordMatch);
+    
+    if (isPasswordMatch && user.role === 'vendor') {
+      console.log('Login successful, generating token');
+      res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        storeName: user.storeName,
+        token: generateToken(user._id),
+      });
+    } else {
+      console.log('Login failed: Invalid credentials or not a vendor');
+      res.status(401);
+      throw new Error('Invalid email or password');
+    }
   } else {
+    console.log('Login failed: User not found');
     res.status(401);
     throw new Error('Invalid email or password');
   }

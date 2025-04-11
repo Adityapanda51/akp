@@ -16,7 +16,7 @@ const {
 const { protect } = require('../middleware/vendorAuthMiddleware');
 
 // Public routes
-router.post('/register', registerVendor);
+router.post('/', registerVendor);
 router.post('/login', authVendor);
 router.post('/forgot-password', forgotPassword);
 router.put('/reset-password/:resetToken', resetPassword);

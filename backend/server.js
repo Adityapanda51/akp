@@ -13,23 +13,16 @@ connectDB();
 
 const app = express();
 
-// CORS Configuration
-const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-  'http://localhost:19000',
-  'http://localhost:19006',
-  'http://10.0.2.2:19000',
-  'http://192.168.98.174:19000',
-  'http://192.168.98.174:19006'
-];
-
-// Middleware
-app.use(express.json());
+// CORS Configuration - Allow all origins in development
 app.use(cors({
-  origin: corsOrigins,
+  origin: '*', // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Middleware
+app.use(express.json());
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -48,5 +41,5 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-  console.log('Allowed origins:', corsOrigins);
+  console.log('CORS enabled for all origins in development mode');
 }); 

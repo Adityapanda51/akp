@@ -1,15 +1,22 @@
 import axios from 'axios';
+import type { RawAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Get the local IP address for Expo Go
+const getLocalIpAddress = () => {
+  return '192.168.98.174'; // Your local IP address
+};
 
 // Use environment variable or fallback to appropriate URL based on platform
-// For mobile devices, we need to use the IP address instead of localhost
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.98.174:5000/api';
+const API_URL = Platform.select({
+  android: `http://${getLocalIpAddress()}:5000/api`,
+  ios: `http://${getLocalIpAddress()}:5000/api`,
+  default: 'http://localhost:5000/api'
+});
 
-// Override any localhost URLs for mobile devices
-const finalApiUrl = API_URL.includes('localhost') ? 'http://192.168.98.174:5000/api' : API_URL;
-
-console.log('API URL from environment:', process.env.EXPO_PUBLIC_API_URL);
-console.log('Final API URL being used:', finalApiUrl);
+console.log('API URL being used:', API_URL);
 
 interface User {
   _id: string;
@@ -35,37 +42,30 @@ interface AuthResponse {
 
 interface ProfileResponse extends User {}
 
+// Create axios instance with default config
 const api = axios.create({
-  baseURL: finalApiUrl,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 10000,
 });
 
-// Add request interceptor
+// Add token to requests
 api.interceptors.request.use(
-  function(config) {
-    console.log('Request interceptor - URL:', config.url);
-    console.log('Request interceptor - Method:', config.method);
-    console.log('Request interceptor - Headers:', config.headers);
-    console.log('Request interceptor - Data:', config.data);
-    
-    // Get token synchronously to avoid type issues
-    AsyncStorage.getItem('token').then(token => {
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('vendorToken');
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log('Token added to request:', token.substring(0, 10) + '...');
-      } else {
-        console.log('No token available for request');
       }
-    }).catch(error => {
-      console.error('Error retrieving token:', error);
-    });
-    
-    return config;
+      return config;
+    } catch (error) {
+      console.error('Request interceptor error:', error);
+      return Promise.reject(error);
+    }
   },
-  function(error) {
+  (error) => {
     console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
@@ -112,169 +112,91 @@ api.interceptors.response.use(
   }
 );
 
-export const authAPI = {
-  login: async (email: string, password: string): Promise<AuthResponse> => {
-    try {
-      console.log('Login attempt for email:', email);
-      const response = await api.post<AuthResponse>('/vendors/login', { email, password });
-      console.log('Login successful:', response.data);
-      // Store the token
-      await AsyncStorage.setItem('token', response.data.token);
-      return response.data;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  },
-
-  register: async (data: {
-    name: string;
-    email: string;
-    password: string;
-    phone: string;
-    storeName: string;
-    storeAddress: string;
-  }): Promise<AuthResponse> => {
-    console.log('Registering with data:', {
-      ...data,
-      password: '********'
-    });
-    console.log('API URL for registration:', API_URL);
-    const response = await api.post<AuthResponse>('/vendors/register', {
-      name: data.name,
-      email: data.email,
-      password: data.password,
-      phone: data.phone,
-      storeName: data.storeName,
-      storeAddress: data.storeAddress
-    });
+// Auth APIs
+export const registerVendor = async (vendorData: any) => {
+  try {
+    console.log('Registering vendor with data:', vendorData);
+    console.log('Making request to:', `${API_URL}/vendors`);
+    const response = await api.post('/vendors', vendorData);
+    console.log('Registration response:', response.data);
     return response.data;
-  },
-
-  getProfile: async (): Promise<ProfileResponse> => {
-    try {
-      console.log('Fetching profile');
-      const response = await api.get<ProfileResponse>('/vendors/profile');
-      console.log('Profile fetched successfully:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Get profile error:', error);
-      throw error;
-    }
-  },
-
-  forgotPassword: async (email: string): Promise<void> => {
-    try {
-      console.log('Sending forgot password request for:', email);
-      await api.post('/vendors/forgot-password', { email });
-      console.log('Forgot password request sent successfully');
-    } catch (error) {
-      console.error('Forgot password error:', error);
-      throw error;
-    }
-  },
-
-  resetPassword: async (token: string, password: string): Promise<void> => {
-    try {
-      console.log('Resetting password with token');
-      await api.post(`/vendors/reset-password/${token}`, { password });
-      console.log('Password reset successful');
-    } catch (error) {
-      console.error('Reset password error:', error);
-      throw error;
-    }
-  },
+  } catch (error: any) {
+    console.error('Registration error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        data: error.config?.data
+      }
+    });
+    throw error;
+  }
 };
 
-export const productAPI = {
-  getAll: async () => {
-    try {
-      const response = await api.get('/products');
-      return response.data;
-    } catch (error) {
-      console.error('Get all products error:', error);
-      throw error;
-    }
-  },
-
-  getById: async (id: string) => {
-    try {
-      const response = await api.get(`/products/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('Get product by ID error:', error);
-      throw error;
-    }
-  },
-
-  create: async (data: FormData) => {
-    try {
-      const response = await api.post('/products', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Create product error:', error);
-      throw error;
-    }
-  },
-
-  update: async (id: string, data: FormData) => {
-    try {
-      const response = await api.put(`/products/${id}`, data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Update product error:', error);
-      throw error;
-    }
-  },
-
-  delete: async (id: string) => {
-    try {
-      await api.delete(`/products/${id}`);
-    } catch (error) {
-      console.error('Delete product error:', error);
-      throw error;
-    }
-  },
+export const loginVendor = async (credentials: { email: string; password: string }) => {
+  try {
+    console.log('Logging in vendor with email:', credentials.email);
+    const response = await api.post('/vendors/login', credentials);
+    console.log('Login response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Login error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    throw error;
+  }
 };
 
-export const orderAPI = {
-  getAll: async () => {
-    try {
-      const response = await api.get('/orders');
-      return response.data;
-    } catch (error) {
-      console.error('Get all orders error:', error);
-      throw error;
-    }
-  },
+export const forgotPassword = async (email: string) => {
+  const response = await api.post('/vendors/forgot-password', { email });
+  return response.data;
+};
 
-  getById: async (id: string) => {
-    try {
-      const response = await api.get(`/orders/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('Get order by ID error:', error);
-      throw error;
-    }
-  },
+export const resetPassword = async (token: string, password: string) => {
+  const response = await api.post('/vendors/reset-password', { token, password });
+  return response.data;
+};
 
-  updateStatus: async (id: string, status: string) => {
-    try {
-      const response = await api.put(`/orders/${id}/status`, { status });
-      return response.data;
-    } catch (error) {
-      console.error('Update order status error:', error);
-      throw error;
-    }
-  },
+// Profile APIs
+export const getVendorProfile = async () => {
+  const response = await api.get('/profile');
+  return response.data;
+};
+
+export const updateVendorProfile = async (profileData: any) => {
+  const response = await api.put('/profile', profileData);
+  return response.data;
+};
+
+export const updateVendorPassword = async (passwordData: { currentPassword: string; newPassword: string }) => {
+  const response = await api.put('/profile/password', passwordData);
+  return response.data;
+};
+
+// Product APIs
+export const getVendorProducts = async () => {
+  const response = await api.get('/products');
+  return response.data;
+};
+
+export const createProduct = async (productData: any) => {
+  const response = await api.post('/products', productData);
+  return response.data;
+};
+
+export const updateProduct = async (productId: string, productData: any) => {
+  const response = await api.put(`/products/${productId}`, productData);
+  return response.data;
+};
+
+export const deleteProduct = async (productId: string) => {
+  const response = await api.delete(`/products/${productId}`);
+  return response.data;
 };
 
 export default api; 

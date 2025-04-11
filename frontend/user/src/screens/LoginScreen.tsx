@@ -53,7 +53,14 @@ const LoginScreen = ({ navigation }: any) => {
 
   const handleLogin = async () => {
     if (validateForm()) {
-      await login(email, password);
+      try {
+        console.log('Attempting login...');
+        await login(email, password);
+        console.log('Login successful');
+      } catch (error: any) {
+        console.error('Login failed:', error);
+        // Error is already set in the AuthContext
+      }
     }
   };
 
@@ -79,7 +86,21 @@ const LoginScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.formContainer}>
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              {error.includes('Cannot connect to the server') && (
+                <TouchableOpacity 
+                  onPress={handleLogin}
+                  style={styles.retryButton}
+                >
+                  <Text style={styles.retryButtonText}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <Input
             label="Email"
@@ -163,11 +184,26 @@ const styles = StyleSheet.create({
   formContainer: {
     marginTop: SIZES.padding,
   },
+  errorContainer: {
+    marginBottom: SIZES.padding,
+    alignItems: 'center',
+  },
   errorText: {
     ...FONTS.body4,
     color: COLORS.error,
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.base,
     textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    borderRadius: SIZES.radius,
+  },
+  retryButtonText: {
+    ...FONTS.body4,
+    color: COLORS.white,
+    fontWeight: 'bold',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
