@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "AKP Hyperlocal",
+    "slug": "akp-hyperlocal-user",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF"
+      }
+    }
+  }
+} 
