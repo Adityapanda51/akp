@@ -11,7 +11,7 @@ const sendEmail = require('../utils/sendEmail');
 // @access  Public
 const registerVendor = asyncHandler(async (req, res) => {
   console.log('Vendor registration attempt:', req.body);
-  const { name, email, password, storeName } = req.body;
+  const { name, email, password, storeName, phone } = req.body;
 
   console.log('Checking if user already exists with email:', email);
   const userExists = await User.findOne({ email });
@@ -29,6 +29,7 @@ const registerVendor = asyncHandler(async (req, res) => {
     password,
     role: 'vendor',
     storeName,
+    phone,
   });
 
   if (user) {
