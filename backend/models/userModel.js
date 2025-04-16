@@ -40,6 +40,26 @@ const userSchema = mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Vendor specific fields
+    storeName: String,
+    storeAddress: String,
+    
+    // Delivery partner specific fields
+    vehicleType: {
+      type: String,
+      enum: ['bike', 'scooter', 'car', 'van'],
+      default: 'bike',
+    },
+    vehicleNumber: String,
+    deliveryStatus: {
+      type: String,
+      enum: ['available', 'busy', 'offline'],
+      default: 'offline',
+    },
+    
+    // Password reset fields
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
   },
   {
     timestamps: true,

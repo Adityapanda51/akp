@@ -5,6 +5,7 @@ const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const userRoutes = require('./routes/userRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
+const deliveryRoutes = require('./routes/deliveryRoutes');
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use(express.json());
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/vendors', vendorRoutes);
+app.use('/api/delivery', deliveryRoutes);
 
 // Root route
 app.get('/', (req, res) => {
