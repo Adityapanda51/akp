@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,49 +9,134 @@ import {
   Platform,
   Image,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
+import { getVendorProducts, deleteProduct } from '../services/api';
 
-type Product = {
-  id: string;
+// Updated categories as requested
+const categories = [
+  'All',
+  'Bakery',
+  'Biryani',
+  'Fast Food',
+];
+
+interface Product {
+  _id: string;
   name: string;
   price: number;
-  stock: number;
-  image: string;
+  countInStock: number;
+  images: string[];
   category: string;
   description: string;
-};
+}
 
-const ProductsScreen = ({ navigation }) => {
-  // Dummy data for demonstration
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: '1',
-      name: 'Product 1',
-      price: 29.99,
-      stock: 50,
-      image: 'https://via.placeholder.com/150',
-      category: 'Category 1',
-      description: 'Description for product 1',
-    },
-    // Add more dummy products as needed
-  ]);
+const ProductsScreen = ({ navigation }: { navigation: any }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [filterCategory, setFilterCategory] = useState('all');
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-  const handleDeleteProduct = (productId: string) => {
-    // TODO: Implement delete product logic
-    setProducts(products.filter(product => product.id !== productId));
+  useEffect(() => {
+    filterProductsByCategory();
+  }, [selectedCategory, products]);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const response = await getVendorProducts();
+      setProducts(response);
+      setFilteredProducts(response);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filterProductsByCategory = () => {
+    if (selectedCategory === 'All' || !products.length) {
+      setFilteredProducts(products);
+      return;
+    }
+    
+    const filtered = products.filter(
+      (product) => product.category.toLowerCase() === selectedCategory.toLowerCase()
+    );
+    setFilteredProducts(filtered);
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    // Add confirmation dialog before deleting
+    const confirmDelete = await new Promise((resolve) => {
+      Alert.alert(
+        'Confirm Delete',
+        'Are you sure you want to delete this product? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Delete', style: 'destructive', onPress: () => resolve(true) }
+        ]
+      );
+    });
+
+    if (!confirmDelete) return;
+    
+    try {
+      setLoading(true);
+      console.log(`Attempting to delete product with ID: ${productId}`);
+      await deleteProduct(productId);
+      
+      console.log('Product deleted successfully, updating UI');
+      // Update local state after successful deletion
+      setProducts(prevProducts => prevProducts.filter(product => product._id !== productId));
+      Alert.alert('Success', 'Product deleted successfully!');
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      
+      // Better error handling with specific messages for server errors
+      let errorMessage = 'Failed to delete product. Please try again.';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const serverMessage = error.response.data?.message || '';
+        
+        console.error(`Server returned status ${status} with message: ${serverMessage}`);
+        
+        if (status === 500 && serverMessage.includes('remove is not a function')) {
+          errorMessage = 'Server error: The product could not be deleted due to a server-side issue. Please contact support.';
+        } else {
+          errorMessage = `Server Error: ${status} - ${serverMessage || 'Unknown error'}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderProductItem = ({ item }: { item: Product }) => (
     <View style={styles.productCard}>
-      <Image source={{ uri: item.image }} style={styles.productImage} />
+      <Image 
+        source={{ uri: item.images[0] || 'https://via.placeholder.com/150' }} 
+        style={styles.productImage} 
+      />
       <View style={styles.productInfo}>
         <Text style={styles.productName}>{item.name}</Text>
         <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-        <Text style={styles.productStock}>Stock: {item.stock}</Text>
+        <Text style={styles.productStock}>Stock: {item.countInStock}</Text>
         <Text style={styles.productCategory}>{item.category}</Text>
       </View>
       <View style={styles.productActions}>
@@ -63,12 +148,31 @@ const ProductsScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDeleteProduct(item.id)}
+          onPress={() => handleDeleteProduct(item._id)}
         >
           <MaterialIcons name="delete" size={20} color={COLORS.error} />
         </TouchableOpacity>
       </View>
     </View>
+  );
+
+  const renderCategoryItem = ({ item }: { item: string }) => (
+    <TouchableOpacity
+      style={[
+        styles.filterButton,
+        selectedCategory === item && styles.filterButtonActive,
+      ]}
+      onPress={() => setSelectedCategory(item)}
+    >
+      <Text
+        style={[
+          styles.filterButtonText,
+          selectedCategory === item && styles.filterButtonTextActive,
+        ]}
+      >
+        {item}
+      </Text>
+    </TouchableOpacity>
   );
 
   return (
@@ -90,33 +194,54 @@ const ProductsScreen = ({ navigation }) => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterScroll}
           >
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filterCategory === 'all' && styles.filterButtonActive,
-              ]}
-              onPress={() => setFilterCategory('all')}
-            >
-              <Text
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category}
                 style={[
-                  styles.filterButtonText,
-                  filterCategory === 'all' && styles.filterButtonTextActive,
+                  styles.filterButton,
+                  selectedCategory === category && styles.filterButtonActive,
                 ]}
+                onPress={() => setSelectedCategory(category)}
               >
-                All
-              </Text>
-            </TouchableOpacity>
-            {/* Add more category filter buttons as needed */}
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    selectedCategory === category && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         </View>
 
-        <FlatList
-          data={products}
-          renderItem={renderProductItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.productList}
-          showsVerticalScrollIndicator={false}
-        />
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : filteredProducts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="inbox" size={64} color={COLORS.lightGray} />
+            <Text style={styles.emptyText}>No products found</Text>
+            <Text style={styles.emptySubtext}>
+              Add your first product by tapping the + button
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredProducts}
+            renderItem={renderProductItem}
+            keyExtractor={item => item._id}
+            contentContainerStyle={styles.productList}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchProducts().finally(() => setRefreshing(false));
+            }}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -232,6 +357,29 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: COLORS.error + '15',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.padding,
+  },
+  emptyText: {
+    ...FONTS.h3,
+    color: COLORS.gray,
+    marginTop: SIZES.padding,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    marginTop: SIZES.base,
+    textAlign: 'center',
   },
 });
 

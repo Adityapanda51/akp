@@ -17,7 +17,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
 import { useAuth } from '../context/AuthContext';
-import { getProducts, getProductsByCategory, getNearbyProducts, reverseGeocode, geocodeAddress } from '../services/api';
+import { getProducts, getProductsByCategory, getNearbyProducts, reverseGeocode, geocodeAddress, saveUserLocation } from '../services/api';
 import { Product, SavedLocation, GeocodeResult } from '../types';
 import ProductCard from '../components/ProductCard';
 import * as Location from 'expo-location';
@@ -25,14 +25,9 @@ import { debounce } from 'lodash';
 
 const categories = [
   'All',
-  'Groceries',
-  'Vegetables',
-  'Fruits',
-  'Dairy',
   'Bakery',
-  'Meat',
-  'Electronics',
-  'Fashion',
+  'Biryani',
+  'Fast Food',
 ];
 
 const HomeScreen = ({ navigation }: any) => {
@@ -97,22 +92,39 @@ const HomeScreen = ({ navigation }: any) => {
           [{ text: 'OK' }]
         );
         setLocationLoading(false);
+        // Fallback to regular product fetch if permission denied
+        fetchProducts();
         return;
       }
       
       const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
       
+      console.log(`Got device location: ${latitude}, ${longitude}`);
+      
       // Get address from coordinates
       try {
         const geocodeResult = await reverseGeocode(latitude, longitude);
-        setCurrentLocation({
-          latitude,
-          longitude,
-          address: geocodeResult.formattedAddress || 'Current Location',
-        });
+        console.log('Geocode result:', geocodeResult);
+        
+        if (geocodeResult) {
+          setCurrentLocation({
+            latitude,
+            longitude,
+            address: geocodeResult.formattedAddress || 'Current Location',
+          });
+        } else {
+          // If geocoding fails but we have coordinates
+          console.log('Geocoding returned null, using default location data');
+          setCurrentLocation({
+            latitude,
+            longitude,
+            address: 'Current Location',
+          });
+        }
       } catch (error) {
         console.error('Error reverse geocoding:', error);
+        // Still set location with coordinates if we have them
         setCurrentLocation({
           latitude,
           longitude,
@@ -121,7 +133,9 @@ const HomeScreen = ({ navigation }: any) => {
       }
     } catch (error) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'Could not get your location. Please try again.');
+      Alert.alert('Error', 'Could not get your location. Showing all products instead.');
+      // Fallback to regular product fetch
+      fetchProducts();
     } finally {
       setLocationLoading(false);
     }
@@ -129,21 +143,31 @@ const HomeScreen = ({ navigation }: any) => {
 
   const fetchProducts = async () => {
     try {
+      console.log('Fetching all products');
       setLoading(true);
       const response = await getProducts();
+      console.log(`Fetched ${response.length} products`);
       setProducts(response);
       setFilteredProducts(response);
     } catch (error) {
       console.error('Error fetching products:', error);
+      Alert.alert('Error', 'Failed to load products. Please try again later.');
+      setProducts([]);
+      setFilteredProducts([]);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchNearbyProducts = async () => {
-    if (!currentLocation) return;
+    if (!currentLocation) {
+      console.log('No current location set, fetching all products instead');
+      fetchProducts();
+      return;
+    }
     
     try {
+      console.log(`Fetching nearby products at ${currentLocation.latitude}, ${currentLocation.longitude}`);
       setLoading(true);
       const category = selectedCategory !== 'All' ? selectedCategory.toLowerCase() : undefined;
       const response = await getNearbyProducts(
@@ -152,11 +176,13 @@ const HomeScreen = ({ navigation }: any) => {
         10, // 10km radius
         category
       );
+      console.log(`Fetched ${response.length} nearby products`);
       setProducts(response);
       setFilteredProducts(response);
     } catch (error) {
       console.error('Error fetching nearby products:', error);
       // Fallback to regular products if location-based search fails
+      console.log('Falling back to regular product fetch');
       fetchProducts();
     } finally {
       setLoading(false);
@@ -259,8 +285,19 @@ const HomeScreen = ({ navigation }: any) => {
       
       setAddressSearchLoading(true);
       try {
-        const result = await geocodeAddress(text);
-        setAddressSearchResults([result]);
+        console.log(`Searching for address: "${text}"`);
+        const results = await geocodeAddress(text);
+        if (results && results.length > 0) {
+          console.log(`Found ${results.length} addresses`);
+          setAddressSearchResults(results);
+        } else {
+          console.log('No address found');
+          setAddressSearchResults([]);
+          if (text.length > 5) {
+            // Only show alert for longer searches to avoid annoying the user
+            Alert.alert('No Results', 'No locations found for this address. Please try another search term.');
+          }
+        }
       } catch (error) {
         console.error('Error searching address:', error);
         setAddressSearchResults([]);
@@ -282,9 +319,32 @@ const HomeScreen = ({ navigation }: any) => {
       address: item.formattedAddress,
     });
     setLocationModalVisible(false);
-    
+    setAddressSearch('');
+    Keyboard.dismiss();
     // Fetch products for the new location
     fetchNearbyProducts();
+  };
+
+  const saveCurrentLocation = async () => {
+    if (!currentLocation) return;
+    
+    try {
+      const locationData = {
+        name: "Recent Location",
+        type: "other" as const,
+        coordinates: [currentLocation.longitude, currentLocation.latitude] as [number, number],
+        formattedAddress: currentLocation.address,
+      };
+      
+      const updatedUser = await saveUserLocation(locationData);
+      if (updatedUser && updatedUser.savedLocations) {
+        setSavedLocations(updatedUser.savedLocations);
+        Alert.alert('Success', 'Location saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving location:', error);
+      Alert.alert('Error', 'Failed to save location');
+    }
   };
 
   return (
@@ -392,6 +452,53 @@ const HomeScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
             
+            {/* Address Search Input */}
+            <View style={styles.addressSearchContainer}>
+              <View style={styles.addressInputContainer}>
+                <MaterialIcons name="search" size={24} color={COLORS.gray} />
+                <TextInput
+                  style={styles.addressSearchInput}
+                  placeholder="Search for an area, street name..."
+                  value={addressSearch}
+                  onChangeText={handleAddressSearch}
+                  autoCapitalize="none"
+                />
+                {addressSearchLoading && (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                )}
+                {addressSearch.length > 0 && !addressSearchLoading && (
+                  <TouchableOpacity onPress={() => setAddressSearch('')}>
+                    <MaterialIcons name="clear" size={20} color={COLORS.gray} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {/* Address Search Results */}
+              {addressSearchResults.length > 0 && (
+                <View style={styles.addressResultsList}>
+                  {addressSearchResults.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.addressResultItem}
+                      onPress={() => selectAddress(item)}
+                    >
+                      <MaterialIcons name="place" size={24} color={COLORS.primary} />
+                      <View style={styles.addressResultTextContainer}>
+                        <Text style={styles.addressResultText}>
+                          {item.name || item.formattedAddress}
+                        </Text>
+                        <Text style={styles.addressSubText}>
+                          {item.description || 
+                            `${item.city}${item.state ? `, ${item.state}` : ''}${item.country ? `, ${item.country}` : ''}`
+                          }
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+            
             {/* Current Location Button */}
             <TouchableOpacity 
               style={styles.currentLocationBtn}
@@ -404,44 +511,29 @@ const HomeScreen = ({ navigation }: any) => {
               {locationLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
             </TouchableOpacity>
             
-            {/* Manual Address Search */}
-            <View style={styles.addressSearchContainer}>
-              <View style={styles.addressInputContainer}>
-                <MaterialIcons name="search" size={20} color={COLORS.gray} />
-                <TextInput
-                  style={styles.addressSearchInput}
-                  placeholder="Search for an address..."
-                  value={addressSearch}
-                  onChangeText={handleAddressSearch}
-                  placeholderTextColor={COLORS.gray}
-                />
-                {addressSearch ? (
-                  <TouchableOpacity onPress={() => setAddressSearch('')}>
-                    <MaterialIcons name="close" size={20} color={COLORS.gray} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-              
-              {addressSearchLoading && (
-                <ActivityIndicator style={styles.addressSearchLoading} color={COLORS.primary} />
-              )}
-              
-              {addressSearchResults.length > 0 && !addressSearchLoading && (
-                <View style={styles.addressResultsList}>
-                  {addressSearchResults.map((result, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.addressResultItem}
-                      onPress={() => selectAddress(result)}
-                    >
-                      <MaterialIcons name="place" size={22} color={COLORS.primary} />
-                      <Text style={styles.addressResultText}>{result.formattedAddress}</Text>
-                    </TouchableOpacity>
-                  ))}
+            {/* Current Location Actions */}
+            {currentLocation && (
+              <View style={styles.currentLocationContainer}>
+                <View style={styles.currentLocationInfo}>
+                  <MaterialIcons name="location-on" size={24} color={COLORS.primary} />
+                  <View style={styles.currentLocationTextContainer}>
+                    <Text style={styles.currentLocationLabel}>Current Location</Text>
+                    <Text style={styles.currentLocationAddress} numberOfLines={1}>
+                      {currentLocation.address}
+                    </Text>
+                  </View>
                 </View>
-              )}
-            </View>
+                <TouchableOpacity 
+                  style={styles.saveLocationButton}
+                  onPress={saveCurrentLocation}
+                >
+                  <MaterialIcons name="bookmark-border" size={20} color={COLORS.white} />
+                  <Text style={styles.saveLocationText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             
+            {/* Saved Locations */}
             <View style={styles.savedLocationsHeader}>
               <Text style={styles.savedLocationsTitle}>Saved Locations</Text>
               <TouchableOpacity 
@@ -460,6 +552,7 @@ const HomeScreen = ({ navigation }: any) => {
                 keyExtractor={(item) => item._id || item.name}
                 renderItem={renderSavedLocationItem}
                 contentContainerStyle={styles.savedLocationsList}
+                showsVerticalScrollIndicator={false}
               />
             ) : (
               <View style={styles.noSavedLocations}>
@@ -616,11 +709,56 @@ const styles = StyleSheet.create({
     ...FONTS.h2,
     color: COLORS.black,
   },
+  addressSearchContainer: {
+    marginBottom: SIZES.padding,
+  },
+  addressInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 10,
+  },
+  addressSearchInput: {
+    flex: 1,
+    marginLeft: SIZES.padding / 2,
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  addressResultsList: {
+    marginTop: SIZES.base,
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    maxHeight: 200,
+  },
+  addressResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SIZES.padding,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  addressResultTextContainer: {
+    flex: 1,
+    marginLeft: SIZES.padding / 2,
+  },
+  addressResultText: {
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  addressSubText: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
   currentLocationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: SIZES.padding,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
     borderRadius: SIZES.radius,
     marginBottom: SIZES.padding,
   },
@@ -630,12 +768,51 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: SIZES.padding,
   },
+  currentLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SIZES.padding,
+    backgroundColor: 'rgba(0, 128, 255, 0.05)',
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.padding,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 128, 255, 0.2)',
+  },
+  currentLocationInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currentLocationTextContainer: {
+    flex: 1,
+    marginLeft: SIZES.padding / 2,
+  },
+  currentLocationLabel: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+  },
+  currentLocationAddress: {
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  saveLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: SIZES.radius / 2,
+  },
+  saveLocationText: {
+    ...FONTS.body4,
+    color: COLORS.white,
+    marginLeft: 4,
+  },
   savedLocationsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SIZES.padding,
-    marginTop: SIZES.padding,
   },
   savedLocationsTitle: {
     ...FONTS.h3,
@@ -692,46 +869,6 @@ const styles = StyleSheet.create({
     ...FONTS.body4,
     color: COLORS.gray,
     textAlign: 'center',
-  },
-  addressSearchContainer: {
-    marginBottom: SIZES.padding,
-  },
-  addressInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base,
-  },
-  addressSearchInput: {
-    flex: 1,
-    paddingHorizontal: SIZES.base,
-    ...FONTS.body3,
-    color: COLORS.black,
-  },
-  addressSearchLoading: {
-    marginTop: SIZES.padding,
-    alignSelf: 'center',
-  },
-  addressResultsList: {
-    marginTop: SIZES.base,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-  },
-  addressResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SIZES.padding,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
-  },
-  addressResultText: {
-    ...FONTS.body3,
-    color: COLORS.black,
-    marginLeft: SIZES.base,
-    flex: 1,
   },
 });
 

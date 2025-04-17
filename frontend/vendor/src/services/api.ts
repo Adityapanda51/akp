@@ -1,12 +1,13 @@
 import axios from 'axios';
-import type { RawAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { GeocodeResult } from '../types';
 
 // Get the local IP address for Expo Go
 const getLocalIpAddress = () => {
-  return '192.168.98.174'; // Your local IP address
+  // Use a network-accessible IP from your local network
+  return '192.168.101.5'; // Update with your actual local network IP
 };
 
 // Use environment variable or fallback to appropriate URL based on platform
@@ -51,11 +52,11 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Add token to requests
+// Add auth token to requests
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('vendorToken');
+      const token = await AsyncStorage.getItem('token');
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -180,23 +181,166 @@ export const updateVendorPassword = async (passwordData: { currentPassword: stri
 
 // Product APIs
 export const getVendorProducts = async () => {
-  const response = await api.get('/products');
+  const response = await api.get('/vendors/products');
   return response.data;
 };
 
 export const createProduct = async (productData: any) => {
-  const response = await api.post('/products', productData);
-  return response.data;
+  try {
+    console.log('Creating product with data:', productData);
+    
+    // Get token explicitly to check if it exists (using 'token' key)
+    const token = await AsyncStorage.getItem('token');
+    console.log('Token available for request:', token ? 'Yes' : 'No');
+    
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+    
+    // Create headers with token
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+    
+    console.log('Making request to:', `${API_URL}/vendors/products`);
+    console.log('With headers:', headers);
+    
+    const response = await api.post('/vendors/products', productData, { headers });
+    console.log('Product creation response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Product creation error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        data: error.config?.data
+      }
+    });
+    throw error;
+  }
 };
 
 export const updateProduct = async (productId: string, productData: any) => {
-  const response = await api.put(`/products/${productId}`, productData);
-  return response.data;
+  try {
+    console.log('Updating product with ID:', productId);
+    console.log('Update data:', productData);
+    
+    // Get token explicitly to check if it exists
+    const token = await AsyncStorage.getItem('token');
+    console.log('Token available for update request:', token ? 'Yes' : 'No');
+    
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+    
+    // Create headers with token
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+    
+    console.log('Making update request to:', `${API_URL}/vendors/products/${productId}`);
+    console.log('With headers:', headers);
+    
+    const response = await api.put(`/vendors/products/${productId}`, productData, { headers });
+    console.log('Product update response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Product update error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        data: error.config?.data
+      }
+    });
+    throw error;
+  }
 };
 
 export const deleteProduct = async (productId: string) => {
-  const response = await api.delete(`/products/${productId}`);
-  return response.data;
+  try {
+    console.log('Deleting product with ID:', productId);
+    
+    // Get token explicitly to check if it exists
+    const token = await AsyncStorage.getItem('token');
+    console.log('Token available for delete request:', token ? 'Yes' : 'No');
+    
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+    
+    // Create headers with token
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+    
+    console.log('Making delete request to:', `${API_URL}/vendors/products/${productId}`);
+    console.log('With headers:', headers);
+    
+    const response = await api.delete(`/vendors/products/${productId}`, { headers });
+    console.log('Product deletion response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Product deletion error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL
+      }
+    });
+    throw error;
+  }
+};
+
+// Geocoding Services
+export const geocodeAddress = async (address: string): Promise<GeocodeResult[]> => {
+  try {
+    const response = await api.get(`/geocode?address=${encodeURIComponent(address)}`);
+    return response.data as GeocodeResult[];
+  } catch (error: any) {
+    console.error('Geocoding error:', error.message);
+    console.error('Details:', error.response?.data || 'No response data');
+    return [];
+  }
+};
+
+export const reverseGeocode = async (latitude: number, longitude: number): Promise<{
+  formattedAddress: string;
+  city: string;
+  state: string;
+  country: string;
+} | null> => {
+  try {
+    const response = await api.get(`/geocode/reverse?lat=${latitude}&lng=${longitude}`);
+    return response.data as {
+      formattedAddress: string;
+      city: string;
+      state: string;
+      country: string;
+    };
+  } catch (error: any) {
+    console.error('Reverse geocoding error:', error.message);
+    console.error('Details:', error.response?.data || 'No response data');
+    return {
+      formattedAddress: "Location unknown",
+      city: "",
+      state: "",
+      country: ""
+    };
+  }
 };
 
 export default api; 

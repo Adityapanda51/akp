@@ -120,4 +120,6 @@ export interface GeocodeResult {
   city: string;
   state: string;
   country: string;
+  name?: string;
+  description?: string;
 } 

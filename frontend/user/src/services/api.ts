@@ -1,14 +1,14 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Product, Order } from '../types';
+import { User, Product, Order, GeocodeResult } from '../types';
 import { Platform } from 'react-native';
 
 // Base URL for API calls
 // Use appropriate URL based on device type
 const API_URL = Platform.select({
-  android: 'http://192.168.98.174:5000/api', // Android Emulator
-  ios: 'http://192.168.98.174:5000/api',     // iOS Simulator
-  default: 'http://192.168.98.174:5000/api'  // Fallback
+  android: 'http://192.168.101.5:5000/api', // Android Emulator
+  ios: 'http://192.168.101.5:5000/api',     // iOS Simulator
+  default: 'http://192.168.101.5:5000/api'  // Fallback
 });
 
 console.log('Using API URL:', API_URL);
@@ -115,25 +115,39 @@ export const deleteSavedLocation = async (locationId: string): Promise<User> => 
   return response.data;
 };
 
-export const geocodeAddress = async (address: string): Promise<{
-  coordinates: [number, number];
-  formattedAddress: string;
-  city: string;
-  state: string;
-  country: string;
-}> => {
-  const response = await api.get(`/geocode?address=${encodeURIComponent(address)}`);
-  return response.data;
+// Enhanced geocodeAddress to handle errors better and return multiple results
+export const geocodeAddress = async (address: string): Promise<GeocodeResult[]> => {
+  try {
+    const response = await api.get(`/geocode?address=${encodeURIComponent(address)}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Geocoding error:', error.message);
+    console.error('Details:', error.response?.data || 'No response data');
+    return [];
+  }
 };
 
+// Enhanced reverseGeocode to handle errors better
 export const reverseGeocode = async (latitude: number, longitude: number): Promise<{
   formattedAddress: string;
   city: string;
   state: string;
   country: string;
-}> => {
-  const response = await api.get(`/geocode/reverse?lat=${latitude}&lng=${longitude}`);
-  return response.data;
+} | null> => {
+  try {
+    const response = await api.get(`/geocode/reverse?lat=${latitude}&lng=${longitude}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Reverse geocoding error:', error.message);
+    console.error('Details:', error.response?.data || 'No response data');
+    // Return a default value instead of failing
+    return {
+      formattedAddress: "Location unknown",
+      city: "",
+      state: "",
+      country: ""
+    };
+  }
 };
 
 // Product Services

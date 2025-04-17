@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   Dimensions,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +22,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import * as Location from 'expo-location';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { debounce } from 'lodash';
 
 interface ProfileFormData {
   name: string;
@@ -65,6 +68,11 @@ const ProfileScreen = () => {
     latitudeDelta: 0.015,
     longitudeDelta: 0.0121,
   });
+
+  // Add address search functionality
+  const [addressSearch, setAddressSearch] = useState('');
+  const [addressSearchResults, setAddressSearchResults] = useState<any[]>([]);
+  const [addressSearchLoading, setAddressSearchLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -258,6 +266,63 @@ const ProfileScreen = () => {
     }
   };
 
+  const searchAddressDebounced = useRef(
+    debounce(async (text: string) => {
+      if (text.length < 3) {
+        setAddressSearchResults([]);
+        return;
+      }
+      
+      setAddressSearchLoading(true);
+      try {
+        console.log(`Vendor searching for address: "${text}"`);
+        const response = await api.get(`/geocode?address=${encodeURIComponent(text)}`);
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          console.log(`Found ${response.data.length} addresses for vendor`);
+          setAddressSearchResults(response.data);
+        } else {
+          console.log('No address found for vendor search');
+          setAddressSearchResults([]);
+        }
+      } catch (error) {
+        console.error('Vendor address search error:', error);
+        setAddressSearchResults([]);
+      } finally {
+        setAddressSearchLoading(false);
+      }
+    }, 500)
+  ).current;
+
+  const handleAddressSearch = (text: string) => {
+    setAddressSearch(text);
+    searchAddressDebounced(text);
+  };
+
+  const selectAddress = (item: any) => {
+    setRegion({
+      latitude: item.coordinates[1],
+      longitude: item.coordinates[0],
+      latitudeDelta: 0.015,
+      longitudeDelta: 0.0121,
+    });
+    
+    setFormData({
+      ...formData,
+      storeLocation: {
+        coordinates: item.coordinates,
+        address: item.formattedAddress,
+        city: item.city,
+        state: item.state,
+        country: item.country,
+        formattedAddress: item.formattedAddress,
+      }
+    });
+    
+    setAddressSearch('');
+    Keyboard.dismiss();
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -429,8 +494,55 @@ const ProfileScreen = () => {
             </TouchableOpacity>
           </View>
           
+          {/* Address Search Input */}
+          <View style={styles.addressSearchContainer}>
+            <View style={styles.addressInputContainer}>
+              <MaterialIcons name="search" size={24} color={COLORS.gray} />
+              <TextInput
+                style={styles.addressSearchInput}
+                placeholder="Search for your store location..."
+                value={addressSearch}
+                onChangeText={handleAddressSearch}
+                autoCapitalize="none"
+              />
+              {addressSearchLoading && (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              )}
+              {addressSearch.length > 0 && !addressSearchLoading && (
+                <TouchableOpacity onPress={() => setAddressSearch('')}>
+                  <MaterialIcons name="clear" size={20} color={COLORS.gray} />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Address Search Results */}
+            {addressSearchResults.length > 0 && (
+              <View style={styles.addressResultsList}>
+                {addressSearchResults.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.addressResultItem}
+                    onPress={() => selectAddress(item)}
+                  >
+                    <MaterialIcons name="place" size={24} color={COLORS.primary} />
+                    <View style={styles.addressResultTextContainer}>
+                      <Text style={styles.addressResultText}>
+                        {item.name || item.formattedAddress}
+                      </Text>
+                      <Text style={styles.addressSubText}>
+                        {item.description || 
+                          `${item.city}${item.state ? `, ${item.state}` : ''}${item.country ? `, ${item.country}` : ''}`
+                        }
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+          
           <Text style={styles.mapInstructions}>
-            Tap on the map to select your store's exact location
+            Tap on the map to select your store's exact location or search for an address above
           </Text>
           
           <MapView
@@ -462,15 +574,13 @@ const ProfileScreen = () => {
             )}
           </MapView>
           
-          <View style={styles.mapControls}>
-            <TouchableOpacity
-              style={styles.currentLocationMapBtn}
-              onPress={getCurrentLocation}
-              disabled={locationLoading}
-            >
-              <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.currentLocationMapBtn}
+            onPress={getCurrentLocation}
+            disabled={locationLoading}
+          >
+            <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.confirmLocationButton}
@@ -669,11 +779,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: Dimensions.get('window').height * 0.7,
   },
-  mapControls: {
-    position: 'absolute',
-    right: 15,
-    bottom: 80,
-  },
   currentLocationMapBtn: {
     width: 50,
     height: 50,
@@ -681,11 +786,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    ...SHADOWS.small,
+    position: 'absolute',
+    right: 15,
+    bottom: 80,
   },
   confirmLocationButton: {
     backgroundColor: COLORS.primary,
@@ -698,6 +802,52 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  addressSearchContainer: {
+    margin: SIZES.padding,
+  },
+  addressInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 10,
+  },
+  addressSearchInput: {
+    flex: 1,
+    marginLeft: SIZES.padding / 2,
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  addressResultsList: {
+    marginTop: SIZES.base,
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    maxHeight: 200,
+    zIndex: 10,
+  },
+  addressResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SIZES.padding,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  addressResultTextContainer: {
+    flex: 1,
+    marginLeft: SIZES.padding / 2,
+  },
+  addressResultText: {
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  addressSubText: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    marginTop: 2,
   },
 });
 
