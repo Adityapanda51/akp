@@ -212,4 +212,131 @@ export const resetPassword = async (email: string): Promise<void> => {
   return response.data;
 };
 
+// Image Upload Services
+export const uploadSingleImage = async (imageUri: string): Promise<string> => {
+  try {
+    // Create form data
+    const formData = new FormData();
+    
+    // Get file name and type from URI
+    const fileNameMatch = imageUri.match(/[^/]+$/);
+    const fileName = fileNameMatch ? fileNameMatch[0] : 'image.jpg';
+    
+    // Determine file type
+    const fileType = fileName.endsWith('.png') 
+      ? 'image/png' 
+      : fileName.endsWith('.webp')
+        ? 'image/webp'
+        : 'image/jpeg';
+    
+    // Append image to form data
+    formData.append('image', {
+      uri: imageUri,
+      name: fileName,
+      type: fileType,
+    } as any);
+    
+    // Create custom config for form data
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${await AsyncStorage.getItem('userToken')}`
+      },
+    };
+    
+    // Make API request
+    const response = await axios.post(`${API_URL}/upload`, formData, config);
+    
+    // Return image URL
+    return response.data.imageUrl;
+  } catch (error: any) {
+    console.error('Image upload error:', error.message);
+    console.error('Response data:', error.response?.data);
+    throw new Error('Failed to upload image');
+  }
+};
+
+export const uploadMultipleImages = async (imageUris: string[]): Promise<string[]> => {
+  try {
+    // Create form data
+    const formData = new FormData();
+    
+    // Add all images to form data
+    imageUris.forEach((uri, index) => {
+      const fileNameMatch = uri.match(/[^/]+$/);
+      const fileName = fileNameMatch ? fileNameMatch[0] : `image${index}.jpg`;
+      
+      const fileType = fileName.endsWith('.png') 
+        ? 'image/png' 
+        : fileName.endsWith('.webp')
+          ? 'image/webp'
+          : 'image/jpeg';
+      
+      formData.append('images', {
+        uri: uri,
+        name: fileName,
+        type: fileType,
+      } as any);
+    });
+    
+    // Create custom config for form data
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${await AsyncStorage.getItem('userToken')}`
+      },
+    };
+    
+    // Make API request
+    const response = await axios.post(`${API_URL}/upload/multiple`, formData, config);
+    
+    // Return array of image URLs
+    return response.data.imageUrls;
+  } catch (error: any) {
+    console.error('Multiple image upload error:', error.message);
+    console.error('Response data:', error.response?.data);
+    throw new Error('Failed to upload images');
+  }
+};
+
+export const deleteImage = async (imageUrl: string): Promise<void> => {
+  try {
+    await api.delete('/upload', { data: { imageUrl } });
+  } catch (error: any) {
+    console.error('Image deletion error:', error.message);
+    console.error('Response data:', error.response?.data);
+    throw new Error('Failed to delete image');
+  }
+};
+
+/**
+ * Get a pre-signed URL for an S3 image
+ * @param {string} imageUrl - The original S3 image URL
+ * @returns {Promise<string>} - The pre-signed URL
+ */
+export const getPresignedImageUrl = async (imageUrl: string): Promise<string> => {
+  try {
+    // If it's not an S3 URL, return as is
+    if (!imageUrl || !imageUrl.includes('amazonaws.com')) {
+      return imageUrl;
+    }
+    
+    // Extract the key from the URL (the filename after the last slash)
+    const key = imageUrl.split('/').pop();
+    if (!key) return imageUrl;
+    
+    console.log('Getting presigned URL for:', key);
+    
+    // Call the API to get a pre-signed URL
+    const response = await api.get(`/presigned-url/${key}`);
+    
+    // Return the pre-signed URL
+    return response.data.url;
+  } catch (error: any) {
+    console.error('Error getting presigned URL:', error.message);
+    // Return the original URL as fallback
+    return imageUrl;
+  }
+};
+
 export default api; 

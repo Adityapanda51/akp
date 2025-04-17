@@ -200,14 +200,41 @@ const getVendorProducts = asyncHandler(async (req, res) => {
 // @route   POST /api/vendors/products
 // @access  Private
 const addProduct = asyncHandler(async (req, res) => {
+  console.log('Add product request received:', req.body);
+  
   const {
     name,
     description,
     price,
     category,
     countInStock,
-    image
+    images,
+    brand
   } = req.body;
+
+  console.log('Images received from client:', JSON.stringify(images));
+  
+  // Ensure images is always an array
+  let productImages = [];
+  if (images) {
+    if (Array.isArray(images)) {
+      productImages = images;
+    } else if (typeof images === 'string') {
+      productImages = [images];
+    }
+  }
+  
+  // Make sure we have at least one placeholder image if no images are provided
+  if (productImages.length === 0) {
+    productImages = ['https://via.placeholder.com/400x400?text=No+Image'];
+  }
+  
+  console.log('Processed images array:', JSON.stringify(productImages));
+
+  // Get the vendor's location information
+  const vendor = await User.findById(req.user._id);
+  const vendorLocation = vendor.storeLocation || { type: 'Point' };
+  const deliveryRadius = vendor.serviceRadius || 10; // Default 10km
 
   const product = new Product({
     name,
@@ -215,39 +242,100 @@ const addProduct = asyncHandler(async (req, res) => {
     price,
     category,
     countInStock,
-    image,
+    images: productImages, // Use the processed images array
+    brand: brand || 'Default Brand',
     vendor: req.user._id,
+    location: vendorLocation,
+    deliveryRadius,
+    isActive: true
   });
 
-  const createdProduct = await product.save();
-  res.status(201).json(createdProduct);
+  console.log('Creating product with images:', JSON.stringify(productImages));
+  
+  try {
+    const createdProduct = await product.save();
+    console.log('Product created successfully:', createdProduct);
+    
+    // Double-check the saved product has images
+    const savedProduct = await Product.findById(createdProduct._id);
+    console.log('Saved product images:', savedProduct.images);
+    
+    res.status(201).json(savedProduct);
+  } catch (error) {
+    console.error('Error saving product:', error);
+    res.status(500).json({ message: 'Failed to create product', error: error.message });
+  }
 });
 
 // @desc    Update a product
 // @route   PUT /api/vendors/products/:id
 // @access  Private
 const updateProduct = asyncHandler(async (req, res) => {
+  console.log('Update product request received for product ID:', req.params.id);
+  console.log('Update data:', req.body);
+  
   const {
     name,
     description,
     price,
     category,
     countInStock,
-    image
+    images,
+    brand,
+    isActive
   } = req.body;
+
+  console.log('Images received for update:', JSON.stringify(images));
 
   const product = await Product.findById(req.params.id);
 
   if (product && product.vendor.toString() === req.user._id.toString()) {
     product.name = name || product.name;
     product.description = description || product.description;
-    product.price = price || product.price;
+    product.price = price !== undefined ? price : product.price;
     product.category = category || product.category;
-    product.countInStock = countInStock || product.countInStock;
-    product.image = image || product.image;
+    product.countInStock = countInStock !== undefined ? countInStock : product.countInStock;
+    product.brand = brand || product.brand;
+    
+    // Process images array properly
+    if (images) {
+      let productImages = [];
+      if (Array.isArray(images)) {
+        productImages = images;
+      } else if (typeof images === 'string') {
+        productImages = [images];
+      }
+      
+      // Make sure we have at least one placeholder image if no images are provided
+      if (productImages.length === 0) {
+        productImages = ['https://via.placeholder.com/400x400?text=No+Image'];
+      }
+      
+      console.log('Processed update images array:', JSON.stringify(productImages));
+      product.images = productImages;
+    } else if (!product.images || product.images.length === 0) {
+      // Ensure there's at least a placeholder if no images exist and none were provided
+      product.images = ['https://via.placeholder.com/400x400?text=No+Image'];
+    }
+    
+    // Update active status if provided
+    if (isActive !== undefined) {
+      product.isActive = isActive;
+    }
 
-    const updatedProduct = await product.save();
-    res.json(updatedProduct);
+    try {
+      const updatedProduct = await product.save();
+      console.log('Product updated successfully:', updatedProduct);
+      
+      // Double-check the saved product has images
+      const savedProduct = await Product.findById(updatedProduct._id);
+      console.log('Updated product images:', savedProduct.images);
+      
+      res.json(savedProduct);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      res.status(500).json({ message: 'Failed to update product', error: error.message });
+    }
   } else {
     res.status(404);
     throw new Error('Product not found or not authorized');

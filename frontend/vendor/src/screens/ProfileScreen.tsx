@@ -16,9 +16,9 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS, SIZES } from '../utils/theme';
+import { COLORS, SIZES, FONTS, SHADOWS } from '../utils/theme';
 import Input from '../components/Input';
-import api from '../services/api';
+import api, { uploadSingleImage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import * as Location from 'expo-location';
 import MapView, { Marker, Circle } from 'react-native-maps';
@@ -74,6 +74,8 @@ const ProfileScreen = () => {
   const [addressSearchResults, setAddressSearchResults] = useState<any[]>([]);
   const [addressSearchLoading, setAddressSearchLoading] = useState(false);
 
+  const [imageLoading, setImageLoading] = useState(false);
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.name) newErrors.name = 'Name is required';
@@ -95,30 +97,24 @@ const ProfileScreen = () => {
       });
 
       if (!result.canceled) {
-        const formData = new FormData();
-        formData.append('image', {
-          uri: result.assets[0].uri,
-          type: 'image/jpeg',
-          name: 'profile.jpg',
-        } as any);
-
-        setLoading(true);
-        const response = await api.post<ApiResponse>('/vendor/upload-image', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-
-        if (response.data.success && response.data.imageUrl) {
-          updateProfile({ ...user, profilePicture: response.data.imageUrl });
+        setImageLoading(true);
+        try {
+          // Use the S3 upload function instead of direct API call
+          const imageUrl = await uploadSingleImage(result.assets[0].uri);
+          
+          // Update profile with the new image URL
+          updateProfile({ ...user, profilePicture: imageUrl });
           Alert.alert('Success', 'Profile image updated successfully');
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          Alert.alert('Error', 'Failed to upload image. Please try again.');
+        } finally {
+          setImageLoading(false);
         }
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to open image picker. Please try again.');
     }
   };
 
@@ -330,23 +326,32 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.imageContainer}>
-        {user?.profilePicture ? (
-          <Image
-            source={{ uri: user.profilePicture }}
-            style={styles.profileImage as ImageStyle}
-          />
-        ) : (
-          <View style={[styles.profileImage, styles.defaultAvatar]}>
-            <MaterialIcons name="person" size={60} color={COLORS.gray} />
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.imageEditButton}
-          onPress={handleImagePick}
-          disabled={loading}
-        >
-          <MaterialIcons name="edit" size={20} color={COLORS.white} />
-        </TouchableOpacity>
+        <View style={styles.profileImageContainer}>
+          {imageLoading ? (
+            <View style={styles.profileImage}>
+              <ActivityIndicator size="large" color={COLORS.white} />
+            </View>
+          ) : user?.profilePicture ? (
+            <Image 
+              source={{ uri: user.profilePicture }} 
+              style={styles.profileImage as ImageStyle} 
+            />
+          ) : (
+            <View style={[styles.profileImage, styles.noProfileImage]}>
+              <MaterialIcons name="store" size={50} color={COLORS.white} />
+            </View>
+          )}
+          <TouchableOpacity 
+            style={styles.imageEditButton}
+            onPress={handleImagePick}
+            disabled={imageLoading}
+          >
+            <MaterialIcons name="edit" size={20} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+        
+        <Text style={styles.storeName}>{user?.storeName || 'Your Store Name'}</Text>
+        <Text style={styles.email}>{user?.email || 'email@example.com'}</Text>
       </View>
 
       <View style={styles.form}>
@@ -617,6 +622,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     position: 'relative',
   },
+  profileImageContainer: {
+    alignItems: 'center',
+    position: 'relative',
+  },
   profileImage: {
     width: 100,
     height: 100,
@@ -624,7 +633,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.primary,
   },
-  defaultAvatar: {
+  noProfileImage: {
     backgroundColor: COLORS.lightGray,
     justifyContent: 'center',
     alignItems: 'center',
@@ -641,6 +650,15 @@ const styles = StyleSheet.create({
     right: '35%',
     borderWidth: 2,
     borderColor: COLORS.white,
+  },
+  storeName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  email: {
+    fontSize: 16,
+    color: COLORS.gray,
   },
   form: {
     padding: SIZES.padding,

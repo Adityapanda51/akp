@@ -6,12 +6,17 @@ import { GeocodeResult } from '../types';
 
 // Get the local IP address for Expo Go
 const getLocalIpAddress = () => {
-  // Use a network-accessible IP from your local network
-  return '192.168.101.5'; // Update with your actual local network IP
+  // For Expo Go on a physical device, you need your computer's actual IP on your local network
+  // Examples: 192.168.1.x, 10.0.0.x, etc. - check your network settings
+  // You MUST change this to your actual IP address for Expo Go to connect to your dev server
+  const localIP = '192.168.101.5'; // Use the IP that was working before
+  console.log('Using local IP address:', localIP);
+  return localIP;
 };
 
 // Use environment variable or fallback to appropriate URL based on platform
 const API_URL = Platform.select({
+  // For Expo Go on physical devices, use the local network IP
   android: `http://${getLocalIpAddress()}:5000/api`,
   ios: `http://${getLocalIpAddress()}:5000/api`,
   default: 'http://localhost:5000/api'
@@ -340,6 +345,195 @@ export const reverseGeocode = async (latitude: number, longitude: number): Promi
       state: "",
       country: ""
     };
+  }
+};
+
+// Image Upload Services
+export const uploadSingleImage = async (imageUri: string): Promise<string> => {
+  try {
+    console.log('==== S3 UPLOAD DEBUG - SINGLE IMAGE ====');
+    console.log('Starting upload of image to S3:', imageUri);
+    
+    // Create form data
+    const formData = new FormData();
+    
+    // Get file name and type from URI
+    const fileNameMatch = imageUri.match(/[^/]+$/);
+    const fileName = fileNameMatch ? fileNameMatch[0] : 'image.jpg';
+    
+    // Determine file type
+    const fileType = fileName.endsWith('.png') 
+      ? 'image/png' 
+      : fileName.endsWith('.webp')
+        ? 'image/webp'
+        : 'image/jpeg';
+    
+    console.log('Image details:', { fileName, fileType });
+    
+    // Append image to form data
+    formData.append('image', {
+      uri: imageUri,
+      name: fileName,
+      type: fileType,
+    } as any);
+    
+    // Create custom config for form data
+    const token = await AsyncStorage.getItem('token');
+    console.log('Authorization token present:', !!token);
+    
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`
+      },
+    };
+    
+    console.log('Making upload request to:', `${API_URL}/upload`);
+    
+    // Make API request
+    const response = await axios.post(`${API_URL}/upload`, formData, config);
+    
+    // Log success and returned URL
+    console.log('Upload successful. Response status:', response.status);
+    console.log('S3 Image URL received:', response.data.imageUrl);
+    console.log('==== END S3 UPLOAD DEBUG - SINGLE IMAGE ====');
+    
+    // Return image URL
+    return response.data.imageUrl;
+  } catch (error: any) {
+    console.error('==== S3 UPLOAD ERROR - SINGLE IMAGE ====');
+    console.error('Image upload error:', error.message);
+    
+    if (error.response) {
+      console.error('Error response status:', error.response.status);
+      console.error('Error response data:', error.response.data);
+      console.error('Error response headers:', error.response.headers);
+    } else if (error.request) {
+      console.error('No response received. Request:', error.request);
+    }
+    
+    console.error('==== END S3 UPLOAD ERROR - SINGLE IMAGE ====');
+    throw new Error('Failed to upload image');
+  }
+};
+
+export const uploadMultipleImages = async (imageUris: string[]): Promise<string[]> => {
+  try {
+    console.log('==== S3 UPLOAD DEBUG - MULTIPLE IMAGES ====');
+    console.log('Starting upload of multiple images. Count:', imageUris.length);
+    
+    // Create form data
+    const formData = new FormData();
+    
+    // Add all images to form data
+    imageUris.forEach((uri, index) => {
+      const fileNameMatch = uri.match(/[^/]+$/);
+      const fileName = fileNameMatch ? fileNameMatch[0] : `image${index}.jpg`;
+      
+      const fileType = fileName.endsWith('.png') 
+        ? 'image/png' 
+        : fileName.endsWith('.webp')
+          ? 'image/webp'
+          : 'image/jpeg';
+      
+      console.log(`Image ${index} details:`, { fileName, fileType });
+      
+      formData.append('images', {
+        uri: uri,
+        name: fileName,
+        type: fileType,
+      } as any);
+    });
+    
+    // Create custom config for form data
+    const token = await AsyncStorage.getItem('token');
+    console.log('Authorization token present:', !!token);
+    
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`
+      },
+    };
+    
+    console.log('Making upload request to:', `${API_URL}/upload/multiple`);
+    
+    // Make API request
+    const response = await axios.post(`${API_URL}/upload/multiple`, formData, config);
+    
+    // Log success and returned URLs
+    console.log('Upload successful. Response status:', response.status);
+    console.log('S3 Image URLs received:', response.data.imageUrls);
+    console.log('==== END S3 UPLOAD DEBUG - MULTIPLE IMAGES ====');
+    
+    // Validate the returned URLs
+    if (response.data && response.data.imageUrls && Array.isArray(response.data.imageUrls)) {
+      const urls = response.data.imageUrls;
+      urls.forEach((url: string, index: number) => {
+        console.log(`Image ${index} URL:`, url);
+        if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+          console.warn(`Invalid image URL at index ${index}:`, url);
+        }
+      });
+      return urls;
+    } else {
+      console.error('Invalid response format from image upload:', response.data);
+      return [];
+    }
+  } catch (error: any) {
+    console.error('==== S3 UPLOAD ERROR - MULTIPLE IMAGES ====');
+    console.error('Multiple image upload error:', error.message);
+    
+    if (error.response) {
+      console.error('Error response status:', error.response.status);
+      console.error('Error response data:', error.response.data);
+      console.error('Error response headers:', error.response.headers);
+    } else if (error.request) {
+      console.error('No response received. Request:', error.request);
+    }
+    
+    console.error('==== END S3 UPLOAD ERROR - MULTIPLE IMAGES ====');
+    throw new Error('Failed to upload images');
+  }
+};
+
+export const deleteImage = async (imageUrl: string): Promise<void> => {
+  try {
+    await api.delete('/upload', { data: { imageUrl } });
+  } catch (error: any) {
+    console.error('Image deletion error:', error.message);
+    console.error('Response data:', error.response?.data);
+    throw new Error('Failed to delete image');
+  }
+};
+
+/**
+ * Get a pre-signed URL for an S3 image
+ * @param {string} imageUrl - The original S3 image URL
+ * @returns {Promise<string>} - The pre-signed URL
+ */
+export const getPresignedImageUrl = async (imageUrl: string): Promise<string> => {
+  try {
+    // If it's not an S3 URL, return as is
+    if (!imageUrl || !imageUrl.includes('amazonaws.com')) {
+      return imageUrl;
+    }
+    
+    // Extract the key from the URL (the filename after the last slash)
+    const key = imageUrl.split('/').pop();
+    if (!key) return imageUrl;
+    
+    console.log('Getting presigned URL for:', key);
+    
+    // Call the API to get a pre-signed URL
+    const response = await api.get(`/presigned-url/${key}`);
+    
+    // Return the pre-signed URL
+    return response.data.url;
+  } catch (error: any) {
+    console.error('Error getting presigned URL:', error.message);
+    // Return the original URL as fallback
+    return imageUrl;
   }
 };
 

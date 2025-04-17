@@ -11,12 +11,13 @@ import {
   Image,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
 import Button from '../components/Button';
-import { createProduct } from '../services/api';
+import { createProduct, uploadMultipleImages } from '../services/api';
 import axios from 'axios';
 
 // Updated categories as requested
@@ -55,6 +56,7 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
 
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const handleImagePick = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -68,7 +70,7 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 0.8,
     });
 
     if (!result.canceled) {
@@ -142,6 +144,25 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
       try {
         setLoading(true);
         
+        // Upload images to S3 if there are any
+        let productImages = ['https://via.placeholder.com/400x400?text=No+Image'];
+        
+        if (formData.images.length > 0) {
+          setUploadingImages(true);
+          try {
+            // Upload images to S3
+            const uploadedImageUrls = await uploadMultipleImages(formData.images);
+            productImages = uploadedImageUrls;
+            console.log('Images uploaded successfully:', uploadedImageUrls);
+          } catch (error) {
+            console.error('Error uploading images:', error);
+            // Continue with product creation, but use placeholder image
+            alert('Failed to upload some images, but will continue creating the product.');
+          } finally {
+            setUploadingImages(false);
+          }
+        }
+        
         // Format the product data for API
         const productData = {
           name: formData.name,
@@ -151,8 +172,7 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
           description: formData.description,
           // Only include brand if it has value
           ...(formData.brand.trim() !== '' && { brand: formData.brand.trim() }),
-          // Use a default image if none provided
-          images: formData.images.length > 0 ? formData.images : ['https://via.placeholder.com/400x400?text=No+Image']
+          images: productImages
         };
         
         console.log('Sending product data:', JSON.stringify(productData));
@@ -308,6 +328,12 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
                   <Text style={styles.addImageText}>Add Image</Text>
                 </TouchableOpacity>
               </View>
+              {uploadingImages && (
+                <View style={styles.uploadingContainer}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text style={styles.uploadingText}>Uploading images...</Text>
+                </View>
+              )}
             </View>
 
             <Button
@@ -315,6 +341,7 @@ const AddProductScreen = ({ navigation }: { navigation: NavigationProps }) => {
               onPress={handleSubmit}
               containerStyle={styles.submitButton}
               loading={loading}
+              disabled={loading || uploadingImages}
             />
           </View>
         </ScrollView>
@@ -517,7 +544,17 @@ const styles = StyleSheet.create({
   categoryText: {
     ...FONTS.body2,
     color: COLORS.black,
-  }
+  },
+  uploadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SIZES.base,
+  },
+  uploadingText: {
+    ...FONTS.body4,
+    color: COLORS.primary,
+    marginLeft: SIZES.base,
+  },
 });
 
 export default AddProductScreen; 
