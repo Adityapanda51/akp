@@ -6,6 +6,8 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const userRoutes = require('./routes/userRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const deliveryRoutes = require('./routes/deliveryRoutes');
+const geocodeRoutes = require('./routes/geocodeRoutes');
+const productRoutes = require('./routes/productRoutes');
 
 dotenv.config();
 
@@ -29,6 +31,8 @@ app.use(express.json());
 app.use('/api/users', userRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/geocode', geocodeRoutes);
+app.use('/api/products', productRoutes);
 
 // Root route
 app.get('/', (req, res) => {

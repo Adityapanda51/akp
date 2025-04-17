@@ -83,6 +83,59 @@ export const updateUserProfile = async (userData: Partial<User>): Promise<User> 
   return response.data;
 };
 
+// Location Services
+export const updateUserLocation = async (locationData: {
+  coordinates: [number, number]; // [longitude, latitude]
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  formattedAddress?: string;
+}): Promise<User> => {
+  const response = await api.put('/users/location', { currentLocation: locationData });
+  return response.data;
+};
+
+export const saveUserLocation = async (locationData: {
+  name: string;
+  type: 'home' | 'work' | 'other';
+  coordinates: [number, number]; // [longitude, latitude]
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  formattedAddress?: string;
+}): Promise<User> => {
+  const response = await api.post('/users/saved-locations', locationData);
+  return response.data;
+};
+
+export const deleteSavedLocation = async (locationId: string): Promise<User> => {
+  const response = await api.delete(`/users/saved-locations/${locationId}`);
+  return response.data;
+};
+
+export const geocodeAddress = async (address: string): Promise<{
+  coordinates: [number, number];
+  formattedAddress: string;
+  city: string;
+  state: string;
+  country: string;
+}> => {
+  const response = await api.get(`/geocode?address=${encodeURIComponent(address)}`);
+  return response.data;
+};
+
+export const reverseGeocode = async (latitude: number, longitude: number): Promise<{
+  formattedAddress: string;
+  city: string;
+  state: string;
+  country: string;
+}> => {
+  const response = await api.get(`/geocode/reverse?lat=${latitude}&lng=${longitude}`);
+  return response.data;
+};
+
 // Product Services
 export const getProducts = async (): Promise<Product[]> => {
   const response = await api.get('/products');
@@ -101,6 +154,21 @@ export const getProductsByCategory = async (category: string): Promise<Product[]
 
 export const searchProducts = async (keyword: string): Promise<Product[]> => {
   const response = await api.get(`/products/search/${keyword}`);
+  return response.data;
+};
+
+// Location-based product search
+export const getNearbyProducts = async (
+  latitude: number,
+  longitude: number,
+  radius: number = 10, // Default radius in kilometers
+  category?: string
+): Promise<Product[]> => {
+  let url = `/products/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`;
+  if (category) {
+    url += `&category=${category}`;
+  }
+  const response = await api.get(url);
   return response.data;
 };
 

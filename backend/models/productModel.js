@@ -79,11 +79,37 @@ const productSchema = mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Location data for the product (inherits from vendor's location)
+    location: {
+      type: {
+        type: String,
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: '2dsphere'
+      },
+      address: {
+        street: String,
+        city: String,
+        state: String,
+        zipCode: String,
+        country: String,
+      }
+    },
+    // For delivery radius in kilometers
+    deliveryRadius: {
+      type: Number,
+      default: 10,
+    }
   },
   {
     timestamps: true,
   }
 );
+
+// Create a geospatial index for efficient location-based queries
+productSchema.index({ "location.coordinates": "2dsphere" });
 
 const Product = mongoose.model('Product', productSchema);
 

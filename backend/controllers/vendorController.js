@@ -132,6 +132,25 @@ const updateVendorProfile = asyncHandler(async (req, res) => {
     user.storeName = req.body.storeName || user.storeName;
     user.storeAddress = req.body.storeAddress || user.storeAddress;
     user.phone = req.body.phone || user.phone;
+    user.description = req.body.description || user.description;
+    
+    // Update store location if provided
+    if (req.body.storeLocation && req.body.storeLocation.coordinates) {
+      user.storeLocation = {
+        type: 'Point',
+        coordinates: req.body.storeLocation.coordinates,
+        address: req.body.storeLocation.address,
+        city: req.body.storeLocation.city,
+        state: req.body.storeLocation.state,
+        country: req.body.storeLocation.country,
+        formattedAddress: req.body.storeLocation.formattedAddress
+      };
+    }
+    
+    // Update service radius if provided
+    if (req.body.serviceRadius) {
+      user.serviceRadius = req.body.serviceRadius;
+    }
 
     if (req.body.password) {
       user.password = req.body.password;
@@ -139,12 +158,28 @@ const updateVendorProfile = asyncHandler(async (req, res) => {
 
     const updatedUser = await user.save();
 
+    // Also update the location of all vendor's products
+    if (req.body.storeLocation && req.body.storeLocation.coordinates) {
+      await Product.updateMany(
+        { vendor: user._id },
+        { 
+          location: user.storeLocation,
+          deliveryRadius: user.serviceRadius
+        }
+      );
+    }
+
     res.json({
       _id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
       storeName: updatedUser.storeName,
+      storeAddress: updatedUser.storeAddress,
+      phone: updatedUser.phone,
+      description: updatedUser.description,
+      storeLocation: updatedUser.storeLocation,
+      serviceRadius: updatedUser.serviceRadius,
       token: generateToken(updatedUser._id),
     });
   } else {

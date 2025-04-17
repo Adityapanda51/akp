@@ -18,6 +18,8 @@ const authUser = asyncHandler(async (req, res) => {
       role: user.role,
       phone: user.phone,
       address: user.address,
+      currentLocation: user.currentLocation,
+      savedLocations: user.savedLocations,
       profilePicture: user.profilePicture,
       token: generateToken(user._id),
     });
@@ -80,6 +82,8 @@ const getUserProfile = asyncHandler(async (req, res) => {
       role: user.role,
       phone: user.phone,
       address: user.address,
+      currentLocation: user.currentLocation,
+      savedLocations: user.savedLocations,
       profilePicture: user.profilePicture,
     });
   } else {
@@ -123,6 +127,8 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       role: updatedUser.role,
       phone: updatedUser.phone,
       address: updatedUser.address,
+      currentLocation: updatedUser.currentLocation,
+      savedLocations: updatedUser.savedLocations,
       profilePicture: updatedUser.profilePicture,
       token: generateToken(updatedUser._id),
     });
@@ -130,6 +136,133 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('User not found');
   }
+});
+
+// @desc    Update user current location
+// @route   PUT /api/users/location
+// @access  Private
+const updateUserLocation = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  if (!req.body.currentLocation || !req.body.currentLocation.coordinates) {
+    res.status(400);
+    throw new Error('Location coordinates are required');
+  }
+
+  user.currentLocation = {
+    type: 'Point',
+    coordinates: req.body.currentLocation.coordinates,
+    address: req.body.currentLocation.address,
+    city: req.body.currentLocation.city,
+    state: req.body.currentLocation.state,
+    country: req.body.currentLocation.country,
+    formattedAddress: req.body.currentLocation.formattedAddress
+  };
+
+  const updatedUser = await user.save();
+
+  res.json({
+    _id: updatedUser._id,
+    name: updatedUser.name,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    phone: updatedUser.phone,
+    address: updatedUser.address,
+    currentLocation: updatedUser.currentLocation,
+    savedLocations: updatedUser.savedLocations,
+    profilePicture: updatedUser.profilePicture,
+  });
+});
+
+// @desc    Save a location to user's saved locations
+// @route   POST /api/users/saved-locations
+// @access  Private
+const saveUserLocation = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  const { name, type, coordinates, address, city, state, country, formattedAddress } = req.body;
+
+  if (!name || !coordinates) {
+    res.status(400);
+    throw new Error('Name and coordinates are required');
+  }
+
+  // Initialize savedLocations array if it doesn't exist
+  if (!user.savedLocations) {
+    user.savedLocations = [];
+  }
+
+  // Add new location to the array
+  user.savedLocations.push({
+    name,
+    type: type || 'other',
+    coordinates,
+    address,
+    city,
+    state,
+    country,
+    formattedAddress
+  });
+
+  const updatedUser = await user.save();
+
+  res.status(201).json({
+    _id: updatedUser._id,
+    name: updatedUser.name,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    phone: updatedUser.phone,
+    address: updatedUser.address,
+    currentLocation: updatedUser.currentLocation,
+    savedLocations: updatedUser.savedLocations,
+    profilePicture: updatedUser.profilePicture,
+  });
+});
+
+// @desc    Delete a saved location
+// @route   DELETE /api/users/saved-locations/:id
+// @access  Private
+const deleteSavedLocation = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  if (!user.savedLocations || user.savedLocations.length === 0) {
+    res.status(404);
+    throw new Error('No saved locations found');
+  }
+
+  // Filter out the location with the matching ID
+  user.savedLocations = user.savedLocations.filter(
+    location => location._id.toString() !== req.params.id
+  );
+
+  const updatedUser = await user.save();
+
+  res.json({
+    _id: updatedUser._id,
+    name: updatedUser.name,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    phone: updatedUser.phone,
+    address: updatedUser.address,
+    currentLocation: updatedUser.currentLocation,
+    savedLocations: updatedUser.savedLocations,
+    profilePicture: updatedUser.profilePicture,
+  });
 });
 
 // @desc    Get all users
@@ -211,6 +344,9 @@ module.exports = {
   registerUser,
   getUserProfile,
   updateUserProfile,
+  updateUserLocation,
+  saveUserLocation,
+  deleteSavedLocation,
   getUsers,
   deleteUser,
   getUserById,

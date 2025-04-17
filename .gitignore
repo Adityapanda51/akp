@@ -66,4 +66,8 @@ web-build/
 .env*.local
 
 # typescript
-*.tsbuildinfo 
+*.tsbuildinfo
+
+# New lines added
+**/node_modules/
+**/%ProgramData%/ 

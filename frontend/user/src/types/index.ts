@@ -5,6 +5,8 @@ export interface User {
   role: string;
   phone: string;
   address: Address;
+  currentLocation?: Location;
+  savedLocations?: SavedLocation[];
   profilePicture?: string;
   token?: string;
 }
@@ -15,6 +17,22 @@ export interface Address {
   state?: string;
   zipCode?: string;
   country?: string;
+}
+
+export interface Location {
+  type?: string;
+  coordinates: [number, number]; // [longitude, latitude]
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  formattedAddress?: string;
+}
+
+export interface SavedLocation extends Location {
+  _id?: string;
+  name: string;
+  type: 'home' | 'work' | 'other';
 }
 
 export interface Product {
@@ -30,6 +48,19 @@ export interface Product {
   price: number;
   countInStock: number;
   reviews?: Review[];
+  location?: Location;
+  deliveryRadius?: number;
+}
+
+export interface Vendor {
+  _id: string;
+  name: string;
+  storeName: string;
+  storeAddress: string;
+  storeLocation?: Location;
+  serviceRadius?: number;
+  rating?: number;
+  profilePicture?: string;
 }
 
 export interface Review {
@@ -51,6 +82,7 @@ export interface Order {
   user: string;
   orderItems: OrderItem[];
   shippingAddress: Address;
+  deliveryLocation?: Location;
   paymentMethod: string;
   paymentResult?: PaymentResult;
   taxPrice: number;
@@ -62,6 +94,8 @@ export interface Order {
   deliveredAt?: string;
   status: string;
   createdAt: string;
+  estimatedDeliveryTime?: string;
+  distance?: number;
 }
 
 export interface OrderItem {
@@ -78,4 +112,12 @@ export interface PaymentResult {
   status: string;
   update_time: string;
   email_address: string;
+}
+
+export interface GeocodeResult {
+  coordinates: [number, number];
+  formattedAddress: string;
+  city: string;
+  state: string;
+  country: string;
 } 
