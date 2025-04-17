@@ -4,20 +4,26 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
 import { useCart } from '../context/CartContext';
 import Button from '../components/Button';
+import SafeImage from '../components/SafeImage';
+import { CartItem } from '../types';
 
 const CartScreen = ({ navigation }: any) => {
   const { cartItems, removeFromCart, updateCartItemQuantity, cartTotal } = useCart();
 
-  const renderCartItem = ({ item }) => (
+  const renderCartItem = ({ item }: { item: CartItem }) => (
     <View style={styles.cartItem}>
-      <Image source={{ uri: item.product.images[0] }} style={styles.itemImage} />
+      <SafeImage 
+        uri={item.product.images[0]} 
+        placeholderContent={item.product.name}
+        style={styles.itemImage} 
+      />
       
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={1}>
@@ -53,6 +59,19 @@ const CartScreen = ({ navigation }: any) => {
     </View>
   );
 
+  const handleCheckout = () => {
+    if (cartItems.length === 0) {
+      Alert.alert(
+        "Empty Cart",
+        "Please add items to your cart before proceeding to checkout.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    
+    navigation.navigate('Checkout');
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -86,7 +105,7 @@ const CartScreen = ({ navigation }: any) => {
             
             <Button
               title="Proceed to Checkout"
-              onPress={() => navigation.navigate('Checkout')}
+              onPress={handleCheckout}
               containerStyle={styles.checkoutButton}
             />
           </View>

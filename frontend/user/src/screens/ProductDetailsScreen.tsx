@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
 import { Product } from '../types';
 import { useCart } from '../context/CartContext';
 import Button from '../components/Button';
+import SafeImage from '../components/SafeImage';
 
 interface ProductDetailsScreenProps {
   route: {
@@ -20,7 +21,25 @@ const ProductDetailsScreen = ({ route, navigation }: ProductDetailsScreenProps) 
   const { addToCart } = useCart();
 
   const handleAddToCart = () => {
+    // Add product to cart
     addToCart(product, 1);
+    
+    // Show feedback to user
+    Alert.alert(
+      "Added to Cart",
+      `${product.name} has been added to your cart.`,
+      [
+        { 
+          text: "Continue Shopping", 
+          style: "cancel" 
+        },
+        { 
+          text: "Go to Cart", 
+          onPress: () => navigation.navigate('Cart') 
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
@@ -34,8 +53,9 @@ const ProductDetailsScreen = ({ route, navigation }: ProductDetailsScreenProps) 
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: product.images[0] }}
+          <SafeImage
+            uri={product.images && product.images.length > 0 ? product.images[0] : ''}
+            placeholderContent={product.name}
             style={styles.image}
             resizeMode="cover"
           />

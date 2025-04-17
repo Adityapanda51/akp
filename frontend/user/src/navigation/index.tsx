@@ -20,6 +20,7 @@ import OrdersScreen from '../screens/OrdersScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderConfirmationScreen from '../screens/OrderConfirmationScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import DeliveryAddressScreen from '../screens/DeliveryAddressScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -48,6 +49,7 @@ const CartStack = () => {
       <Stack.Screen name="CartMain" component={CartScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
       <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+      <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
     </Stack.Navigator>
   );
 };

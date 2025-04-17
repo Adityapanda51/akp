@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,75 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Platform,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
+import { getDashboardStats, getVendorOrders } from '../services/api';
+import { Order } from '../types';
 
 const DashboardScreen = ({ navigation }) => {
-  const stats = {
-    totalOrders: 150,
-    pendingOrders: 12,
-    totalProducts: 45,
-    totalRevenue: 15000,
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    totalProducts: 0,
+    totalRevenue: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchDashboardData = async () => {
+    try {
+      const dashboardData = await getDashboardStats();
+      console.log('Dashboard data received:', dashboardData);
+      
+      // Handle pendingOrders specifically
+      const pendingOrdersCount = dashboardData.pendingOrders || 0;
+      
+      setStats({
+        totalOrders: dashboardData.totalOrders || 0,
+        pendingOrders: pendingOrdersCount,
+        totalProducts: dashboardData.totalProducts || 0,
+        totalRevenue: dashboardData.revenue || 0,
+      });
+
+      if (dashboardData.recentOrders) {
+        setRecentOrders(dashboardData.recentOrders);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const renderStatCard = (title: string, value: number | string, icon: string) => (
-    <View style={styles.statCard}>
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
+  };
+
+  const renderStatCard = (title: string, value: number | string, icon: string, onPress?: () => void) => (
+    <TouchableOpacity 
+      style={styles.statCard}
+      onPress={onPress}
+      disabled={!onPress}
+    >
       <View style={styles.statIconContainer}>
         <MaterialIcons name={icon} size={24} color={COLORS.primary} />
       </View>
       <Text style={styles.statValue}>
-        {typeof value === 'number' && title === 'Total Revenue' ? `$${value}` : value}
+        {typeof value === 'number' && title === 'Total Revenue' ? `$${value.toFixed(2)}` : value}
       </Text>
       <Text style={styles.statTitle}>{title}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderQuickAction = (title: string, icon: string, onPress: () => void) => (
@@ -40,6 +87,44 @@ const DashboardScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return COLORS.warning;
+      case 'processing':
+        return COLORS.info;
+      case 'completed':
+        return COLORS.success;
+      case 'cancelled':
+        return COLORS.error;
+      default:
+        return COLORS.gray;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Dashboard</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+              <MaterialIcons name="notifications" size={24} color={COLORS.black} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading dashboard...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -50,11 +135,22 @@ const DashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           <View style={styles.statsContainer}>
-            {renderStatCard('Total Orders', stats.totalOrders, 'shopping-cart')}
-            {renderStatCard('Pending Orders', stats.pendingOrders, 'pending-actions')}
-            {renderStatCard('Total Products', stats.totalProducts, 'inventory')}
+            {renderStatCard('Total Orders', stats.totalOrders, 'shopping-cart', 
+              () => navigation.navigate('Orders', { screen: 'OrdersList', params: { filter: 'all' } })
+            )}
+            {renderStatCard('Pending Orders', stats.pendingOrders, 'pending-actions', 
+              () => navigation.navigate('Orders', { screen: 'OrdersList', params: { filter: 'pending' } })
+            )}
+            {renderStatCard('Total Products', stats.totalProducts, 'inventory',
+              () => navigation.navigate('Products')
+            )}
             {renderStatCard('Total Revenue', stats.totalRevenue, 'attach-money')}
           </View>
 
@@ -83,17 +179,40 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
-            {/* TODO: Add recent orders list component */}
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Popular Products</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Products')}>
-                <Text style={styles.seeAllText}>See All</Text>
-              </TouchableOpacity>
-            </View>
-            {/* TODO: Add popular products list component */}
+            
+            {recentOrders.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="inbox" size={48} color={COLORS.lightGray} />
+                <Text style={styles.emptyText}>No recent orders</Text>
+              </View>
+            ) : (
+              <View style={styles.ordersContainer}>
+                {recentOrders.map((order, index) => (
+                  <TouchableOpacity
+                    key={order._id}
+                    style={styles.orderCard}
+                    onPress={() => navigation.navigate('OrderDetails', { orderId: order._id })}
+                  >
+                    <View style={styles.orderHeader}>
+                      <Text style={styles.orderId}>Order #{order._id.substring(0, 8)}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+                        <Text style={styles.statusText}>{order.status}</Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.orderInfo}>
+                      <Text style={styles.customerName}>{order.user.name}</Text>
+                      <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
+                    </View>
+                    
+                    <View style={styles.orderFooter}>
+                      <Text style={styles.orderTotal}>${order.totalPrice.toFixed(2)}</Text>
+                      <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -123,6 +242,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...FONTS.h2,
     color: COLORS.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...FONTS.body3,
+    color: COLORS.gray,
+    marginTop: SIZES.base,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -203,6 +332,69 @@ const styles = StyleSheet.create({
     ...FONTS.body3,
     color: COLORS.black,
     flex: 1,
+  },
+  ordersContainer: {
+    paddingHorizontal: SIZES.padding,
+  },
+  orderCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: SIZES.padding,
+    ...SHADOWS.small,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SIZES.base,
+  },
+  orderId: {
+    ...FONTS.h4,
+    color: COLORS.black,
+  },
+  statusBadge: {
+    paddingHorizontal: SIZES.base,
+    paddingVertical: 4,
+    borderRadius: SIZES.radius / 2,
+  },
+  statusText: {
+    ...FONTS.body4,
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  orderInfo: {
+    marginBottom: SIZES.base,
+  },
+  customerName: {
+    ...FONTS.body3,
+    color: COLORS.black,
+  },
+  orderDate: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+  },
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGray + '30',
+    paddingTop: SIZES.base,
+  },
+  orderTotal: {
+    ...FONTS.h4,
+    color: COLORS.primary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SIZES.padding * 2,
+  },
+  emptyText: {
+    ...FONTS.body3,
+    color: COLORS.gray,
+    marginTop: SIZES.base,
   },
 });
 

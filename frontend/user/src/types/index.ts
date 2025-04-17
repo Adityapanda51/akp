@@ -17,6 +17,7 @@ export interface Address {
   state?: string;
   zipCode?: string;
   country?: string;
+  name?: string;
 }
 
 export interface Location {
@@ -79,6 +80,7 @@ export interface CartItem {
 
 export interface Order {
   _id: string;
+  orderNumber?: string;
   user: string;
   orderItems: OrderItem[];
   shippingAddress: Address;
@@ -96,6 +98,7 @@ export interface Order {
   createdAt: string;
   estimatedDeliveryTime?: string;
   distance?: number;
+  id?: string;
 }
 
 export interface OrderItem {
@@ -104,7 +107,7 @@ export interface OrderItem {
   image: string;
   price: number;
   product: string;
-  vendor: string;
+  vendor?: string;
 }
 
 export interface PaymentResult {

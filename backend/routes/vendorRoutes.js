@@ -10,6 +10,10 @@ const {
   updateProduct,
   deleteProduct,
   getDashboardStats,
+  getVendorOrders,
+  getVendorOrderById,
+  updateOrderStatus,
+  getPendingOrdersCount,
   forgotPassword,
   resetPassword,
 } = require('../controllers/vendorController');
@@ -29,5 +33,11 @@ router.post('/products', protect, addProduct);
 router.put('/products/:id', protect, updateProduct);
 router.delete('/products/:id', protect, deleteProduct);
 router.get('/dashboard', protect, getDashboardStats);
+
+// Order routes
+router.get('/orders', protect, getVendorOrders);
+router.get('/orders/pending/count', protect, getPendingOrdersCount);
+router.get('/orders/:id', protect, getVendorOrderById);
+router.put('/orders/:id/status', protect, updateOrderStatus);
 
 module.exports = router; 

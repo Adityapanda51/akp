@@ -537,4 +537,50 @@ export const getPresignedImageUrl = async (imageUrl: string): Promise<string> =>
   }
 };
 
+// Order APIs
+export const getVendorOrders = async () => {
+  try {
+    const response = await api.get('/vendors/orders');
+    return response.data;
+  } catch (error: any) {
+    console.error('Error fetching vendor orders:', error.message);
+    throw error;
+  }
+};
+
+export const getOrderById = async (orderId: string) => {
+  try {
+    const response = await api.get(`/vendors/orders/${orderId}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Error fetching order details:', error.message);
+    throw error;
+  }
+};
+
+export const updateOrderStatus = async (orderId: string, status: string) => {
+  try {
+    const response = await api.put(`/vendors/orders/${orderId}/status`, { status });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error updating order status:', error.message);
+    throw error;
+  }
+};
+
+// Stats/Dashboard APIs
+export const getDashboardStats = async () => {
+  try {
+    const response = await api.get('/vendors/dashboard');
+    return response.data;
+  } catch (error: any) {
+    console.error('Dashboard stats error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    throw error;
+  }
+};
+
 export default api; 

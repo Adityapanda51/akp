@@ -486,6 +486,99 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get orders for the vendor
+// @route   GET /api/vendors/orders
+// @access  Private
+const getVendorOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({
+    'orderItems.vendor': req.user._id
+  })
+  .populate('user', 'name email')
+  .populate('orderItems.product', 'name images price')
+  .sort({ createdAt: -1 });
+  
+  res.json(orders);
+});
+
+// @desc    Get order details
+// @route   GET /api/vendors/orders/:id
+// @access  Private
+const getVendorOrderById = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id)
+    .populate('user', 'name email')
+    .populate('orderItems.product', 'name images price');
+
+  if (!order) {
+    res.status(404);
+    throw new Error('Order not found');
+  }
+
+  // Check if order contains items from this vendor
+  const vendorItems = order.orderItems.filter(
+    item => item.vendor && item.vendor.toString() === req.user._id.toString()
+  );
+
+  if (vendorItems.length === 0) {
+    res.status(401);
+    throw new Error('Not authorized to view this order');
+  }
+
+  res.json(order);
+});
+
+// @desc    Update order status
+// @route   PUT /api/vendors/orders/:id/status
+// @access  Private
+const updateOrderStatus = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  
+  if (!status) {
+    res.status(400);
+    throw new Error('Status is required');
+  }
+  
+  const order = await Order.findById(req.params.id);
+  
+  if (!order) {
+    res.status(404);
+    throw new Error('Order not found');
+  }
+  
+  // Check if order contains items from this vendor
+  const vendorItems = order.orderItems.filter(
+    item => item.vendor && item.vendor.toString() === req.user._id.toString()
+  );
+
+  if (vendorItems.length === 0) {
+    res.status(401);
+    throw new Error('Not authorized to update this order');
+  }
+  
+  // Update status
+  order.status = status;
+  
+  // If status is completed, mark as delivered
+  if (status === 'completed') {
+    order.isDelivered = true;
+    order.deliveredAt = Date.now();
+  }
+  
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+});
+
+// @desc    Get pending orders count
+// @route   GET /api/vendors/orders/pending/count
+// @access  Private
+const getPendingOrdersCount = asyncHandler(async (req, res) => {
+  const pendingOrders = await Order.countDocuments({
+    'orderItems.vendor': req.user._id,
+    status: 'pending'
+  });
+  
+  res.json({ count: pendingOrders });
+});
+
 module.exports = {
   registerVendor,
   authVendor,
@@ -496,6 +589,10 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getDashboardStats,
+  getVendorOrders,
+  getVendorOrderById,
+  updateOrderStatus,
+  getPendingOrdersCount,
   forgotPassword,
   resetPassword,
 }; 

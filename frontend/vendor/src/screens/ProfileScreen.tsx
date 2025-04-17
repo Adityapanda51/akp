@@ -611,6 +611,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 20,
     alignItems: 'center',
     marginBottom: 15,
+    paddingTop: 30,
   },
   title: {
     fontSize: 20,

@@ -1,95 +1,121 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../utils/theme';
 import { useNavigation, ParamListBase } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-
-interface Order {
-  id: string;
-  orderNumber: string;
-  date: string;
-  status: string;
-  total: number;
-  items: number;
-}
-
-const mockOrders: Order[] = [
-  {
-    id: '1',
-    orderNumber: 'ORD-2023-001',
-    date: '2023-10-15',
-    status: 'Delivered',
-    total: 125.50,
-    items: 3,
-  },
-  {
-    id: '2',
-    orderNumber: 'ORD-2023-002',
-    date: '2023-10-10',
-    status: 'Processing',
-    total: 78.99,
-    items: 2,
-  },
-  {
-    id: '3',
-    orderNumber: 'ORD-2023-003',
-    date: '2023-09-28',
-    status: 'Cancelled',
-    total: 45.00,
-    items: 1,
-  },
-];
+import { getMyOrders } from '../services/api';
+import { Order } from '../types';
 
 const OrdersScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<ParamListBase>>();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchOrders = async () => {
+    try {
+      setError(null);
+      const data = await getMyOrders();
+      setOrders(data);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to load your orders. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchOrders();
+  };
 
   const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'Delivered':
+    switch (status.toLowerCase()) {
+      case 'delivered':
         return COLORS.success;
-      case 'Processing':
+      case 'processing':
+      case 'pending':
         return COLORS.info;
-      case 'Cancelled':
+      case 'shipped':
+      case 'out_for_delivery':
+        return COLORS.warning;
+      case 'cancelled':
         return COLORS.error;
       default:
         return COLORS.gray;
     }
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
   const renderOrderItem = ({ item }: { item: Order }) => (
     <TouchableOpacity
       style={styles.orderCard}
       onPress={() => {
-        // Navigate to order details screen when implemented
-        console.log(`Viewing order ${item.orderNumber}`);
+        navigation.navigate('OrderDetails', { orderId: item._id });
       }}
     >
       <View style={styles.orderHeader}>
-        <Text style={styles.orderNumber}>{item.orderNumber}</Text>
+        <Text style={styles.orderNumber}>Order #{item.orderNumber || item._id.substring(0, 8)}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{item.status}</Text>
         </View>
       </View>
       
       <View style={styles.orderInfo}>
-        <Text style={styles.orderDate}>Ordered on {item.date}</Text>
-        <Text style={styles.orderTotal}>${item.total.toFixed(2)}</Text>
+        <Text style={styles.orderDate}>Ordered on {formatDate(item.createdAt)}</Text>
+        <Text style={styles.orderTotal}>${item.totalPrice.toFixed(2)}</Text>
       </View>
       
       <View style={styles.orderFooter}>
-        <Text style={styles.orderItems}>{item.items} {item.items > 1 ? 'items' : 'item'}</Text>
+        <Text style={styles.orderItems}>
+          {item.orderItems.length} {item.orderItems.length > 1 ? 'items' : 'item'}
+        </Text>
         <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
       </View>
     </TouchableOpacity>
   );
+
+  if (loading && !refreshing) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading your orders...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <MaterialIcons name="error-outline" size={64} color={COLORS.error} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchOrders}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -97,12 +123,15 @@ const OrdersScreen: React.FC = () => {
         <Text style={styles.headerTitle}>My Orders</Text>
       </View>
 
-      {mockOrders.length > 0 ? (
+      {orders.length > 0 ? (
         <FlatList
-          data={mockOrders}
-          keyExtractor={(item) => item.id}
+          data={orders}
+          keyExtractor={(item) => item._id}
           renderItem={renderOrderItem}
           contentContainerStyle={styles.ordersList}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -126,6 +155,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.padding * 2,
   },
   header: {
     backgroundColor: COLORS.white,
@@ -168,6 +202,7 @@ const styles = StyleSheet.create({
     ...FONTS.body5,
     color: COLORS.white,
     fontWeight: 'bold',
+    textTransform: 'capitalize',
   },
   orderInfo: {
     flexDirection: 'row',
@@ -216,6 +251,28 @@ const styles = StyleSheet.create({
     ...FONTS.body3,
     color: COLORS.white,
     fontWeight: 'bold',
+  },
+  loadingText: {
+    ...FONTS.body3,
+    color: COLORS.gray,
+    marginTop: SIZES.padding,
+  },
+  errorText: {
+    ...FONTS.body3,
+    color: COLORS.error,
+    marginTop: SIZES.padding,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: SIZES.base,
+    paddingHorizontal: SIZES.padding,
+    borderRadius: SIZES.radius,
+    marginTop: SIZES.padding,
+  },
+  retryButtonText: {
+    ...FONTS.body3,
+    color: COLORS.white,
   },
 });
 

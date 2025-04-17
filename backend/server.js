@@ -10,6 +10,7 @@ const deliveryRoutes = require('./routes/deliveryRoutes');
 const geocodeRoutes = require('./routes/geocodeRoutes');
 const productRoutes = require('./routes/productRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 dotenv.config();
 
@@ -104,6 +105,7 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Test route for images - serves a simple test image
 app.get('/test-image', (req, res) => {

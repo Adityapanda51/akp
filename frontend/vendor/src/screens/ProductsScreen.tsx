@@ -247,14 +247,14 @@ const ProductsScreen = ({ navigation }: { navigation: any }) => {
         </View>
 
         {/* Test image using proxy endpoint */}
-        <View style={{ padding: 10, alignItems: 'center' }}>
+        {/* <View style={{ padding: 10, alignItems: 'center' }}>
           <Text>Test Image Proxy:</Text>
           <Image 
             source={{ uri: `${API_URL}/test-s3-image` }}
             style={{ width: 80, height: 80, marginTop: 5, borderRadius: 10 }}
             onError={(error) => console.error('Test proxy image error:', error.nativeEvent.error)}
           />
-        </View>
+        </View> */}
 
         <View style={styles.filterContainer}>
           <ScrollView

@@ -10,6 +10,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SIZES } from '../utils/theme';
 import Button from '../components/Button';
+import { getOrderById, updateOrderStatus } from '../services/api';
 
 interface OrderItem {
   _id: string;
@@ -51,18 +52,7 @@ const OrderDetailsScreen = () => {
 
   const fetchOrderDetails = async () => {
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/vendors/orders/${orderId}`, {
-        headers: {
-          // TODO: Add authorization header
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not fetch order details');
-      }
-
+      const data = await getOrderById(orderId);
       setOrder(data);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to fetch order details');
@@ -76,24 +66,10 @@ const OrderDetailsScreen = () => {
     fetchOrderDetails();
   }, [orderId]);
 
-  const updateOrderStatus = async (newStatus: Order['status']) => {
+  const handleUpdateOrderStatus = async (newStatus: Order['status']) => {
     try {
       setUpdating(true);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/vendors/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // TODO: Add authorization header
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not update order status');
-      }
-
+      await updateOrderStatus(orderId, newStatus);
       setOrder(prev => prev ? { ...prev, status: newStatus } : null);
       Alert.alert('Success', 'Order status updated successfully');
     } catch (error) {
@@ -184,7 +160,7 @@ const OrderDetailsScreen = () => {
         {order.status === 'pending' && (
           <Button
             title="Accept Order"
-            onPress={() => updateOrderStatus('processing')}
+            onPress={() => handleUpdateOrderStatus('processing')}
             loading={updating}
             style={styles.actionButton}
           />
@@ -192,7 +168,7 @@ const OrderDetailsScreen = () => {
         {order.status === 'processing' && (
           <Button
             title="Mark as Completed"
-            onPress={() => updateOrderStatus('completed')}
+            onPress={() => handleUpdateOrderStatus('completed')}
             loading={updating}
             style={styles.actionButton}
           />
@@ -200,7 +176,7 @@ const OrderDetailsScreen = () => {
         {(order.status === 'pending' || order.status === 'processing') && (
           <Button
             title="Cancel Order"
-            onPress={() => updateOrderStatus('cancelled')}
+            onPress={() => handleUpdateOrderStatus('cancelled')}
             variant="outlined"
             loading={updating}
             style={styles.actionButton}
